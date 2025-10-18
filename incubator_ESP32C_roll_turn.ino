@@ -17,22 +17,21 @@ const unsigned int EGGS_TURNER_PIN = 7;
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
-#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+#define OLED_RESET     -1 
+#define SCREEN_ADDRESS 0x3C 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 int eggsTurnCounter = 10;
 
 void setup_display() {
   
-  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    for(;;); // Don't proceed, loop forever
+    for(;;);
   }
 
   display.clearDisplay();
-  display.setTextSize(2); // Set text size (1 is smallest)
-  display.setTextColor(SSD1306_WHITE); // Set text color
+  display.setTextSize(2); 
+  display.setTextColor(SSD1306_WHITE); 
   display.print("Incubator");
   display.display();
   delay(3000);
@@ -76,20 +75,16 @@ void setup() {
   setup_eggs_turner();  
 }
 
-// ------------
-int cr = 0;
-
 void loop() {
 
   int temperature = 0;
   int humidity = 0;
 
-  // Attempt to read the temperature and humidity values from the DHT11 sensor.
-
   float t = am2302.get_Temperature();
   float h = am2302.get_Humidity();
 
-  /* Simple temperature logic
+  /* 
+  Simple temperature logic
   if (t < minTemp ) {
     digitalWrite(HEATER_PIN, HIGH);
   } else if (t > maxTemp ) {
@@ -107,32 +102,23 @@ void loop() {
   }
 
   auto status = am2302.read();
-  // display.clearDisplay();
-  // display.setTextSize(2);
-  //   // put your main code here, to run repeatedly:
-  // display.setCursor(0, 0);
-  // display.println("Incubating");
-  // display.display();
-  // delay(2000);
 
-  //if (dht22.getLastError() != dht22.OK) {
+  
   display.clearDisplay();
   display.setTextSize(2);
-  // put your main code here, to run repeatedly:
-  display.setCursor(0, 0); // Set cursor to top-left
+  display.setCursor(0, 0); 
   
   display.print(t);
   display.print(" ");
   display.print((char)247); // Print the degree symbol
-  display.println("C"); // Print the string
+  display.println("C"); 
 
-  // display.setCursor(0, 16); // Set cursor to top-left
   display.print(h);
   display.print(" %");
 
   eggsTurnCounter--;
 
-  display.setCursor(10, 40); // Set cursor to top-left
+  display.setCursor(10, 40);
   display.print("   ");
   display.setCursor(10, 40);
 
@@ -148,17 +134,10 @@ void loop() {
     display.print((char) 16);
   } else {
     display.print("   ");
-    //display.print((int) (eggsTurnCounter / 8 / 60 / 6));
-    // display.print((int) ((eggsTurnCounter / 8 / 6 ) % 60 ));
     display.print(eggsTurnCounter);
   }
 
-  display.setCursor(50, 40); // Set cursor to top-left
-
-  // cr++;
-  // if (cr == 256) cr = 0;
-  // display.print((char) cr);
-  // display.print(cr);
+  display.setCursor(50, 40);
   display.display();
 
   delay(1000);
