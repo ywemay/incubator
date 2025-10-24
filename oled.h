@@ -13,7 +13,7 @@ class Oled {
     // Oled() {};
     void setup();
     void display_sensor(int8_t state);
-    void stats(float t, float h, unsigned int turning, unsigned int remained);
+    void stats(float t, float h, unsigned int turning, unsigned int remained, int8_t state);
 };
 
 #endif

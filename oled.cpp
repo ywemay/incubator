@@ -49,7 +49,7 @@ void Oled::display_sensor (int8_t state) {
   display.display();
 }
 
-void Oled::stats(float t, float h, unsigned int turning, unsigned int remained) {
+void Oled::stats(float t, float h, unsigned int turning, unsigned int remained, int8_t state) {
   
   display.clearDisplay();
   display.setTextSize(2);
@@ -76,5 +76,7 @@ void Oled::stats(float t, float h, unsigned int turning, unsigned int remained) 
     display.print(remained);
   }
 
+  display.print(" ");
+  display.print(state);
   display.display();
 }

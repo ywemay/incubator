@@ -9,6 +9,8 @@ Oled oled;
 
 void setup() {
 
+  Serial.begin(115200);
+
   setup_beeper();
   oled.setup();
   if(thermo.setup()) {
@@ -30,6 +32,7 @@ void setup() {
 
 int8_t state;
 uint8_t c = 0;
+uint8_t errorsCount = 0;
 
 void loop() {
 
@@ -41,13 +44,18 @@ void loop() {
 
   if (state != 0) {
     oled.display_sensor(state);
+    errorsCount++;
+    if (errorsCount > 2)
+      beep(1000, 1000);
   } else {
+    errorsCount = 0;
     unsigned int turning = turner.process();
     oled.stats(
       thermo.temperature(),
       thermo.humidity(),
       turning,
-      turner.remained()
+      turner.remained(),
+      state
     );
   }
 

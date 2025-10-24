@@ -18,7 +18,9 @@ void Thermo::heat(uint8_t power) {
 }
 
 void Thermo::stop() {
-  digitalWrite(HEATER_PIN, LOW);
+  Serial.println("Heater pin low.");
+  // digitalWrite(HEATER_PIN, LOW);
+  analogWrite(HEATER_PIN, 0);
 }
 
 int8_t Thermo::adjust() {
@@ -27,19 +29,33 @@ int8_t Thermo::adjust() {
 
   if (state != AM2302::AM2302_READ_OK) {
     stop();
-    beep(1000, 1000);
     return state;
   }
 
   float t = am2302.get_Temperature();
 
-  if (t < minTemp - 6) {
-    heat();
-  } else if (t < maxTemp) {
-    int v = map(t, minTemp, maxTemp, 0, 255);
-    heat(255 - v);
-  } else if (t > maxTemp) {
+  Serial.print("Adjusting: ");
+  Serial.print(t);
+  Serial.print(" -> ");
+  
+  float minTempReact = minTemp;
+
+  if (t > maxTemp + 1) beep(1000, 200, 3);
+
+  if (t >= maxTemp) {
     stop();
+    Serial.println("stop");
+  } else if (t < minTempReact ) {
+    heat();
+    Serial.println("too low, heat");
+  } else if (t < maxTemp - 0.1 && t >= minTempReact) {
+    int v = map(t * 10 , maxTemp * 10, minTempReact * 10, 100, 255);
+    heat(v);
+    Serial.print("moderate, ");
+    Serial.println(v);
+  } else {
+    stop();
+    Serial.println("watever, stop");
   }
 
   return state;
