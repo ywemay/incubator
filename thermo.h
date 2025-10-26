@@ -12,7 +12,7 @@ class Thermo {
   public:
     Thermo() {};
     bool setup();
-    void heat(uint8_t power = 255);
+    void heat();
     void stop();
     int8_t adjust();
     float temperature();

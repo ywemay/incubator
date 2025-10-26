@@ -45,6 +45,8 @@ void Oled::display_sensor (int8_t state) {
     display.println("Timeout");
   } else if (state == -3) {
     display.println("Read freq.");
+  } else if (state == -5) {
+    display.println("Fail to 0");
   }
   display.display();
 }
