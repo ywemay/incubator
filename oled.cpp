@@ -82,3 +82,22 @@ void Oled::stats(float t, float h, unsigned int turning, unsigned int remained, 
   display.print(state);
   display.display();
 }
+
+void Oled::restoreSensor() {
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setCursor(0, 0); 
+  display.println("Trying");
+  display.println("to restore");
+  display.println("sensor.");
+  display.display();
+}
+
+
+void Oled::restarting() {
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setCursor(0, 0); 
+  display.println("Restart");
+  display.display();
+}

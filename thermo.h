@@ -12,6 +12,7 @@ class Thermo {
   public:
     Thermo() {};
     bool setup();
+    bool sensorBegin();
     void heat();
     void stop();
     int8_t adjust();

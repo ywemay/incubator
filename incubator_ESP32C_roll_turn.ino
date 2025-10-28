@@ -13,7 +13,7 @@ void setup() {
   oled.setup();
   if(thermo.setup()) {
     oled.display_sensor(0);
-    delay(3000);
+    delay(1000);
   }
   else {
     oled.display_sensor(-20);
@@ -31,6 +31,7 @@ void setup() {
 int8_t state;
 uint8_t c = 0;
 uint8_t errorsCount = 0;
+uint8_t restoreTries = 0;
 
 void loop() {
 
@@ -38,10 +39,23 @@ void loop() {
     state = thermo.adjust();
     if (state != 0) {
       errorsCount++;
-      if (errorsCount > 2)
+      if (errorsCount > 2) {
+        if (state == -5) {
+          if (restoreTries > 2) {
+            oled.restarting();
+            delay(1000);
+            ESP.restart();
+          } 
+          oled.restoreSensor();
+          thermo.sensorBegin();
+          delay(1000);
+          restoreTries++;
+        }
         beep(1000, 1000);
+      }
     } else {
       errorsCount = 0;
+      restoreTries = 0;
     }
   }
   c++;

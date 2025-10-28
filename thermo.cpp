@@ -8,8 +8,11 @@ const float maxTemp = 38.1;
 bool Thermo::setup() {
   pinMode(HEATER_PIN, OUTPUT);
   stop();
-  return am2302.begin();
+  return sensorBegin();
+}
 
+bool Thermo::sensorBegin() {
+  return am2302.begin();
 }
 
 void Thermo::heat() {

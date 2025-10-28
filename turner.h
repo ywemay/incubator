@@ -4,14 +4,18 @@
 #include <Arduino.h>
 #include "config.h"
 
+#ifdef EGGS_TURNER_SERVO_PIN
+#include <ESP32Servo.h>
+#endif
+
 class Turner {
 
   public:
     // Turner() {};
     void setup();
     unsigned int process();
-    void turn() { digitalWrite(EGGS_TURNER_PIN, HIGH); };
-    void stop() { digitalWrite(EGGS_TURNER_PIN, LOW); };
+    void turn();
+    void stop();
     unsigned int remained();
 };
 
