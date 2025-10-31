@@ -1,10 +1,10 @@
 #include "turner.h"
 #include "config.h"
 
-unsigned int eggsTurnCounter = EGGS_TURN_SECONDS;
+int16_t eggsTurnCounter = EGGS_TURN_SECONDS + 2;
 #ifdef EGGS_TURNER_SERVO_PIN
 Servo eggsTurnServo;
-uint8_t currentServoDegrees = 0;
+int8_t currentServoDegrees = 10;
 int8_t servoDirection = EGGS_TURN_SERVER_STEPS;
 #endif
 
@@ -18,7 +18,7 @@ void Turner::setup() {
   #ifdef EGGS_TURNER_SERVO_PIN
     eggsTurnServo.attach(EGGS_TURNER_SERVO_PIN);
     delay(15);
-    eggsTurnServo.write(0);
+    eggsTurnServo.write(currentServoDegrees);
   #endif
 }
 
@@ -42,11 +42,11 @@ void Turner::turn() {
 
   #ifdef EGGS_TURNER_SERVO_PIN
     currentServoDegrees += servoDirection;
-    if (currentServoDegrees > 180 || currentServoDegrees < 0) {
+    if (currentServoDegrees > 180 || currentServoDegrees < 10) {
       servoDirection = -servoDirection;
       eggsTurnCounter = 0; // stop turnin process - not to go forth and back
     }
-    eggsTurnServo.write(currentServoDegrees);
+    else eggsTurnServo.write(currentServoDegrees);
   #endif
 }
 

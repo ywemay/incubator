@@ -2,9 +2,6 @@
 
 AM2302::AM2302_Sensor am2302{SENSOR_PIN};
 
-const float minTemp = 37.7;
-const float maxTemp = 38.1;
-
 bool Thermo::setup() {
   pinMode(HEATER_PIN, OUTPUT);
   stop();
@@ -24,25 +21,31 @@ void Thermo::stop() {
 }
 
 uint8_t runsCount = 0;
+uint8_t c = 0;
+float t = 0;
+float h = 6;
 
 int8_t Thermo::adjust() {
 
-  int8_t state = am2302.read();
+  int8_t state;
 
-  if (state != AM2302::AM2302_READ_OK) {
-    stop();
-    return state;
+  if (c % 5 == 0) {
+    state = am2302.read();
+    if (state != AM2302::AM2302_READ_OK) {
+      stop();
+      return state;
+    }
+    t = temperature();
+    h = humidity();
   }
-
-  float t = temperature();
-  float h = humidity();
+  c++;
 
   if (t == 0.00 && h == t) {
     stop();
     return -5;
   }
 
-  if (t > maxTemp + 1) {
+  if (t > targetTemp + 1) {
     digitalWrite(HEATER_PIN, 0);
     beep(1000, 200, 3);
     // wait for cooling
@@ -52,13 +55,24 @@ int8_t Thermo::adjust() {
 
   if (runsCount <=2) runsCount++;
 
-  if (t <= (minTemp + maxTemp) / 2) {
+  if (t <= targetTemp - 0.3) {
     heat();
+  } else if (t <= targetTemp) {
+    intermitentHeat();
   } else {
     stop();
   }
 
   return state;
+}
+
+uint8_t intermitentHeatCounter = 0;
+uint8_t intermitentHeatFrequency = 3;
+
+void Thermo::intermitentHeat() {
+  intermitentHeatCounter++;
+  if (intermitentHeatCounter % intermitentHeatFrequency) heat();
+  else stop();
 }
 
 float Thermo::temperature() {

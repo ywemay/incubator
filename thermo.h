@@ -14,6 +14,7 @@ class Thermo {
     bool setup();
     bool sensorBegin();
     void heat();
+    void intermitentHeat();
     void stop();
     int8_t adjust();
     float temperature();

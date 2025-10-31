@@ -5,12 +5,20 @@ void setup_beeper() {
   digitalWrite(BEEPER_PIN, LOW);
 }
 
+void beeper_on() {
+  digitalWrite(BEEPER_PIN, HIGH);
+}
+
+void beeper_off() {
+  digitalWrite(BEEPER_PIN, LOW);
+}
+
 void beep(unsigned long sec, unsigned long pause, unsigned int repeat) {
   unsigned long duration = sec > 0 ? sec : 500;
   for (int i = 0; i <= 1; i++) {
-    digitalWrite(BEEPER_PIN, HIGH);
+    beeper_on();
     delay(duration);
-    digitalWrite(BEEPER_PIN, LOW);
+    beeper_off();
     if (pause) delay(pause);
   }  
 }
