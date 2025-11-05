@@ -75,11 +75,19 @@ void Oled::stats(float t, float h, unsigned int turning, unsigned int remained, 
     if (c < 2) display.print(" ");
     display.print((char) 16);
   } else {
-    display.print(remained);
+    unsigned long hours = remained / 3600;
+    unsigned long minutes = (remained % 3600) / 60;
+    unsigned long seconds = remained % 60;
+    display.print(hours);
+    display.print("h ");
+    display.print(minutes);
+    display.print("m ");
+    display.print(seconds);
+    //display.print("s ");
   }
 
-  display.print(" ");
-  display.print(state);
+  // display.print(" ");
+  // display.print(state);
   display.display();
 }
 

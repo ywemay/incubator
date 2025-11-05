@@ -1,5 +1,7 @@
 #include "leds.h"
 
+#ifdef LEDS_ON
+
 void Leds::setup() {
   pinMode(LED_COLD, OUTPUT);
   pinMode(LED_OK, OUTPUT);
@@ -40,3 +42,5 @@ void Leds::beep(uint8_t pin, unsigned long sec, unsigned long pause, unsigned in
 void Leds::hot_beep(unsigned long sec, unsigned long pause, unsigned int repeat) {
   beep(LED_HOT, sec, pause, repeat);
 }
+
+#endif

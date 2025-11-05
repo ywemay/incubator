@@ -35,7 +35,10 @@ void Feedback::error() {
 
 void Feedback::sensor_setup_fail() {
   display_sensor(-20);
+  #ifdef LEDS_OK
   leds.all(OFF);
+  #endif
+  
   while (true) {
     #ifdef LEDS_ON
       leds.hot_beep(500, 500, 2);
