@@ -9,6 +9,7 @@ Feedback feedback;
 
 void setup() {
 
+  Serial.begin(115200);
   feedback.setup();
   if(thermo.setup()) {
     feedback.sensor_ok();

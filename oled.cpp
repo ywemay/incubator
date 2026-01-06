@@ -5,7 +5,7 @@
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
 #define OLED_RESET     -1 
-#define SCREEN_ADDRESS 0x3C 
+#define SCREEN_ADDRESS 0x3C
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
@@ -62,8 +62,12 @@ void Oled::stats(float t, float h, unsigned int turning, unsigned int remained, 
   display.print((char)247); // Print the degree symbol
   display.println("C"); 
 
-  display.print(h);
-  display.print(" %");
+  if (h == -403) {
+    display.print("no RH %");
+  } else {
+    display.print(h);
+    display.print(" %");
+  }
 
   display.setCursor(10, 40);
   display.print("   ");

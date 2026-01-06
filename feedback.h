@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include "beeper.h"
+#include "config.h"
 #ifdef OLED_ON
 #include "oled.h"
 #endif

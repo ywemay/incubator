@@ -1,0 +1,2 @@
+#define WIFI_SID "YOUR-WIFI"
+#define WIFI_PASS "12345678"

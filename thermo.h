@@ -11,14 +11,20 @@ class Thermo {
 
   public:
     Thermo() {};
+    bool fanOn = false;
     bool setup();
     bool sensorBegin();
     void heat();
+    void fan_on();
+    void fan_off();
     void intermitentHeat();
     void stop();
     int8_t adjust();
     float temperature();
     float humidity();
+  private:
+    void ntcRead();
+    void ntcPower(uint8_t mode);
 };
 
 #endif

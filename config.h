@@ -15,12 +15,27 @@
 // target temperature, celsius
 const float targetTemp = 38.0;
 
-constexpr unsigned int SENSOR_PIN {5U};
+// comment/uncomment to enable/disable the usage of NTC type sersor 
+// #define NTC_SENSOR_PIN A3
+//#define NTC_SENSOR_POWER_PIN A4
+
+// NTC related
+#ifdef NTC_SENSOR_PIN
+#define nominal_resistance 10900       //Nominal resistance at 25⁰C
+#define nominal_temeprature 25   // temperature for nominal 
+#define beta 4000  // The beta coefficient or the B value of the thermistor (usually 3000-4000) check the datasheet for the accurate value.
+#define Rref 9890   //Value of  resistor used for the voltage divider
+#endif
+
+#define FAN_PIN 20
+#define LIGHT_PIN 21
+// comment/uncomment to enable/disable the usage of AM2302 type thermo/humidity sensor
+#define AM2302_SENSOR_PIN 5
 constexpr unsigned int HEATER_PIN {6U};
 
-#define EGGS_TURNER_PIN 7
+#define EGGS_TURNER_PIN 10
 // #define EGGS_TURNER_SERVO_PIN 21
-const unsigned int BEEPER_PIN = 10;
+#define BEEPER_PIN 7
 
 #ifdef EGGS_TURNER_PIN
 const unsigned int EGGS_TURN_SECONDS = 2;

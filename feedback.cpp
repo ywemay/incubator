@@ -12,6 +12,7 @@ void Feedback::setup() {
   setup_beeper();
   #ifdef OLED_ON
     oled.setup();
+    Serial.println("Oled set up.");
   #endif
   #ifdef LEDS_ON
     leds.setup();
