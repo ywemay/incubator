@@ -128,6 +128,10 @@ void loop() {
     unsigned int total_days = incubationTracker.getCurrentIncubationDays();
     bool wifi_connected = wifiManager.isConnected();
     
+    // Get bird species and candling info
+    String bird_species_str = incubationTracker.getSpeciesName();
+    unsigned int candling_day = incubationTracker.getCurrentCandlingDay();
+    
     feedback.displayIncubatorInfo(
       thermo.temperature(),      // Current temperature
       thermo.humidity(),         // Current humidity
@@ -137,7 +141,9 @@ void loop() {
       total_days,                // Total incubation days
       wifi_connected,            // WiFi connection status
       turning,                   // Egg turning status
-      turner.remained()          // Time remaining until next turn
+      turner.remained(),         // Time remaining until next turn
+      bird_species_str.c_str(),  // Bird species name as C string
+      candling_day               // Candling day
     );
     #else
     // Fallback to old display for non-ESP32

@@ -1,5 +1,6 @@
 // #include <SPI.h>
 #include "oled.h"
+#include <string.h>
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -11,6 +12,10 @@
 #define SCREEN_CYCLE_INTERVAL 5000
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+
+
+
 
 // Icon definitions (8x8 pixels)
 const uint8_t Oled::thermometer_icon[8] = {
@@ -88,6 +93,29 @@ const uint8_t Oled::calendar_icon[8] = {
   0b10111101, // # #### #
   0b10111101, // # #### #
   0b10000001  // #      #
+};
+
+// New icons for bird species and candling
+const uint8_t Oled::bird_icon[8] = {
+  0b00011000, //    ##   
+  0b00111100, //   ####  
+  0b01111110, //  ###### 
+  0b01100110, //  ##  ## 
+  0b11111111, // ########
+  0b11100111, // ###  ###
+  0b01111110, //  ###### 
+  0b00111100  //   ####  
+};
+
+const uint8_t Oled::candle_icon[8] = {
+  0b00011000, //    ##   
+  0b00111100, //   ####  
+  0b00111100, //   ####  
+  0b00111100, //   ####  
+  0b01111110, //  ###### 
+  0b01111110, //  ###### 
+  0b00111100, //   ####  
+  0b00011000  //    ##   
 };
 
 bool Oled::setup() {
@@ -247,13 +275,14 @@ void Oled::displayIncubatorInfo(float current_temp, float current_humidity,
                                float target_temp, unsigned int turn_interval,
                                unsigned int incubation_day, unsigned int total_days,
                                const String& ip_address, bool wifi_connected,
-                               unsigned int turning, unsigned int remained) {
+                               unsigned int turning, unsigned int remained,
+                               const String& bird_species, unsigned int candling_day) {
   if (!display_available) return;
   
   // Check if it's time to switch screens
   unsigned long current_time = millis();
   if (current_time - last_screen_change > SCREEN_CYCLE_INTERVAL) {
-    current_screen = (current_screen + 1) % 6; // We have 6 screens (0-5)
+    current_screen = (current_screen + 1) % 8; // We now have 8 screens (0-7)
     last_screen_change = current_time;
   }
   
@@ -279,6 +308,12 @@ void Oled::displayIncubatorInfo(float current_temp, float current_humidity,
       break;
     case 5:
       drawScreen5(current_temp, current_humidity, target_temp);
+      break;
+    case 6:
+      drawScreen6(bird_species.c_str(), incubation_day, total_days);
+      break;
+    case 7:
+      drawScreen7(candling_day, incubation_day);
       break;
   }
   
@@ -317,7 +352,7 @@ void Oled::drawScreen0(float current_temp, float current_humidity, unsigned int 
       if (i < turning % 3) display.print(".");
     }
   } else {
-    display.print("Screen 1/6");
+    display.print("Screen 1/8");
   }
 }
 
@@ -348,7 +383,7 @@ void Oled::drawScreen1(float current_temp, float target_temp) {
   // Bottom status
   display.setCursor(0, 56);
   display.setTextSize(1);
-  display.print("Screen 2/6");
+  display.print("Screen 2/8");
 }
 
 void Oled::drawScreen2(unsigned int turn_interval, unsigned int remained) {
@@ -385,7 +420,7 @@ void Oled::drawScreen2(unsigned int turn_interval, unsigned int remained) {
   // Bottom status
   display.setCursor(0, 56);
   display.setTextSize(1);
-  display.print("Screen 3/6");
+  display.print("Screen 3/8");
 }
 
 void Oled::drawScreen3(unsigned int incubation_day, unsigned int total_days) {
@@ -432,7 +467,7 @@ void Oled::drawScreen3(unsigned int incubation_day, unsigned int total_days) {
   // Bottom status
   display.setCursor(90, 56);
   display.setTextSize(1);
-  display.print("4/6");
+  display.print("4/8");
 }
 
 void Oled::drawScreen4(const String& ip_address, bool wifi_connected) {
@@ -471,7 +506,7 @@ void Oled::drawScreen4(const String& ip_address, bool wifi_connected) {
   // Bottom status
   display.setCursor(90, 56);
   display.setTextSize(1);
-  display.print("5/6");
+  display.print("5/8");
 }
 
 void Oled::drawScreen5(float current_temp, float current_humidity, float target_temp) {
@@ -520,7 +555,124 @@ void Oled::drawScreen5(float current_temp, float current_humidity, float target_
   // Bottom status
   display.setCursor(90, 56);
   display.setTextSize(1);
-  display.print("6/6");
+  display.print("6/8");
+}
+
+void Oled::drawScreen6(const char* bird_species, unsigned int incubation_day, unsigned int total_days) {
+  // Screen 6: Bird species information
+  
+  // Header
+  display.setCursor(0, 0);
+  display.setTextSize(1);
+  display.print("Bird Species");
+  
+  // Draw bird icon
+  drawIcon(0, 12, bird_icon);
+  display.setCursor(12, 12);
+  display.setTextSize(2);
+  
+  if (bird_species && bird_species[0] != '\0') {
+    // Show bird species name (truncate if too long)
+    char display_name[11]; // 10 chars + null terminator
+    strncpy(display_name, bird_species, 10);
+    display_name[10] = '\0';
+    display.print(display_name);
+    
+    // Show incubation day info
+    display.setCursor(0, 36);
+    display.setTextSize(1);
+    if (total_days > 0) {
+      display.print("Day ");
+      display.print(incubation_day);
+      display.print(" of ");
+      display.print(total_days);
+      
+      // Calculate percentage
+      if (total_days > 0) {
+        uint8_t percentage = (incubation_day * 100) / total_days;
+        display.setCursor(0, 48);
+        display.print("Progress: ");
+        display.print(percentage);
+        display.print("%");
+      }
+    } else {
+      display.print("No active incubation");
+    }
+  } else {
+    display.print("Not set");
+    display.setCursor(12, 30);
+    display.print("Select species");
+    display.setCursor(12, 42);
+    display.print("to start");
+  }
+  
+  // Bottom status
+  display.setCursor(90, 56);
+  display.setTextSize(1);
+  display.print("7/8");
+}
+
+void Oled::drawScreen7(unsigned int candling_day, unsigned int incubation_day) {
+  // Screen 7: Candling schedule
+  
+  // Header
+  display.setCursor(0, 0);
+  display.setTextSize(1);
+  display.print("Candling Schedule");
+  
+  // Draw candle icon
+  drawIcon(0, 12, candle_icon);
+  display.setCursor(12, 12);
+  display.setTextSize(2);
+  
+  if (candling_day > 0) {
+    // Show candling day
+    display.print("Day ");
+    display.print(candling_day);
+    
+    // Calculate days until candling
+    if (incubation_day < candling_day) {
+      unsigned int days_until = candling_day - incubation_day;
+      display.setCursor(0, 36);
+      display.setTextSize(1);
+      display.print("Candle in: ");
+      display.print(days_until);
+      display.print(" days");
+      
+      // Show current day
+      display.setCursor(0, 48);
+      display.print("Today: Day ");
+      display.print(incubation_day);
+    } else if (incubation_day == candling_day) {
+      // TODAY IS CANDLING DAY!
+      display.setCursor(0, 36);
+      display.setTextSize(1);
+      display.print("*** TODAY! ***");
+      display.setCursor(0, 48);
+      display.print("Candle eggs now");
+    } else {
+      // Already past candling day
+      display.setCursor(0, 36);
+      display.setTextSize(1);
+      display.print("Candling passed");
+      display.setCursor(0, 48);
+      display.print("Day ");
+      display.print(incubation_day - candling_day);
+      display.print(" days ago");
+    }
+  } else {
+    // No candling scheduled for this species
+    display.print("No candling");
+    display.setCursor(12, 30);
+    display.print("scheduled");
+    display.setCursor(12, 42);
+    display.print("for species");
+  }
+  
+  // Bottom status
+  display.setCursor(90, 56);
+  display.setTextSize(1);
+  display.print("8/8");
 }
 
 void Oled::drawIcon(uint8_t x, uint8_t y, const uint8_t* icon) {

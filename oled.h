@@ -1,5 +1,5 @@
-#ifndef __DISPLAY_H__
-#define __DISPLAY_H__
+#ifndef OLED_H
+#define OLED_H
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -21,6 +21,8 @@ class Oled {
     static const uint8_t wifi_icon[8];
     static const uint8_t target_icon[8];
     static const uint8_t calendar_icon[8];
+    static const uint8_t bird_icon[8];
+    static const uint8_t candle_icon[8];
     
   public:
     Oled() : display_available(false), last_screen_change(0), current_screen(0) {};
@@ -52,6 +54,8 @@ class Oled {
     void drawScreen3(unsigned int incubation_day, unsigned int total_days);
     void drawScreen4(const String& ip_address, bool wifi_connected);
     void drawScreen5(float current_temp, float current_humidity, float target_temp);
+    void drawScreen6(const char* bird_species, unsigned int incubation_day, unsigned int total_days);
+    void drawScreen7(unsigned int candling_day, unsigned int incubation_day);
     
     // Helper methods
     void drawIcon(uint8_t x, uint8_t y, const uint8_t* icon);
@@ -61,4 +65,4 @@ class Oled {
     String formatTime(unsigned int seconds);
 };
 
-#endif
+#endif // OLED_H

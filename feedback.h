@@ -33,7 +33,8 @@ class Feedback {
                              float target_temp, unsigned int turn_interval,
                              unsigned int incubation_day, unsigned int total_days,
                              bool wifi_connected, unsigned int turning = 0, 
-                             unsigned int remained = 0);
+                             unsigned int remained = 0, const char* bird_species = "",
+                             unsigned int candling_day = 0);
 };
 
 #endif

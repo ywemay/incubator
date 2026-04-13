@@ -126,10 +126,12 @@ void Feedback::displayIncubatorInfo(float current_temp, float current_humidity,
                                    float target_temp, unsigned int turn_interval,
                                    unsigned int incubation_day, unsigned int total_days,
                                    bool wifi_connected, unsigned int turning, 
-                                   unsigned int remained) {
+                                   unsigned int remained, const char* bird_species,
+                                   unsigned int candling_day) {
   #ifdef OLED_ON
     oled.displayIncubatorInfo(current_temp, current_humidity, target_temp, 
                              turn_interval, incubation_day, total_days,
-                             current_ip_address, wifi_connected, turning, remained);
+                             current_ip_address, wifi_connected, turning, remained,
+                             bird_species, candling_day);
   #endif
 }
