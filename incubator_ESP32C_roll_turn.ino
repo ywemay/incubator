@@ -8,6 +8,7 @@
 #include "wifi_manager.h"
 #include "web_server.h"
 #include "config_storage.h"
+#include "incubation_tracker.h"
 #endif
 
 // Global objects
@@ -20,6 +21,7 @@ Feedback feedback;
 WiFiManager wifiManager;
 WebServerManager webServer;
 ConfigStorage configStorage;
+IncubationTracker incubationTracker;
 
 // Global configuration variables (defined here for ESP32)
 float targetTemp = 38.0;
@@ -67,6 +69,15 @@ void setup() {
   #ifdef ESP32
   wifiManager.begin();
   webServer.begin();
+  incubationTracker.begin();
+  
+  // Display IP address on OLED if WiFi is connected
+  if (wifiManager.isConnected()) {
+    String ip_address = wifiManager.getIPAddress();
+    Serial.printf("WiFi connected. IP: %s\n", ip_address.c_str());
+    feedback.displayIP(ip_address);
+    delay(3000); // Show IP for 3 seconds
+  }
   #endif
   
   Serial.println("System initialization complete");
@@ -121,6 +132,42 @@ void loop() {
   #ifdef ESP32
   wifiManager.loop();
   webServer.loop();
+  
+  // Check for WiFi connection status changes and display IP
+  static bool last_wifi_status = false;
+  bool current_wifi_status = wifiManager.isConnected();
+  if (current_wifi_status && !last_wifi_status) {
+    // WiFi just connected
+    String ip_address = wifiManager.getIPAddress();
+    Serial.printf("WiFi connected. IP: %s\n", ip_address.c_str());
+    feedback.displayIP(ip_address);
+    delay(2000); // Show IP for 2 seconds
+  }
+  last_wifi_status = current_wifi_status;
+  
+  // Check incubation status (once per minute)
+  static unsigned long last_incubation_check = 0;
+  if (millis() - last_incubation_check > 60000) { // Every minute
+    last_incubation_check = millis();
+    
+    if (incubationTracker.isSessionActive()) {
+      // Check for important days
+      if (incubationTracker.isCandlingDay()) {
+        Serial.println("*** TODAY IS CANDLING DAY! ***");
+        // You could add a special beep pattern here
+      }
+      
+      if (incubationTracker.isLockdownDay()) {
+        Serial.println("*** LOCKDOWN DAY - STOP TURNING EGGS ***");
+        // You could disable egg turning here
+      }
+      
+      if (incubationTracker.isHatchingDay()) {
+        Serial.println("*** HATCHING DAY! ***");
+        // You could add a special notification here
+      }
+    }
+  }
   #endif
   
   delay(1000);

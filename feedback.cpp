@@ -11,8 +11,11 @@ Oled oled;
 void Feedback::setup() {
   setup_beeper();
   #ifdef OLED_ON
-    oled.setup();
-    Serial.println("Oled set up.");
+    if (!oled.setup()) {
+      Serial.println("OLED initialization failed. System will continue without display.");
+    } else {
+      Serial.println("OLED set up successfully.");
+    }
   #endif
   #ifdef LEDS_ON
     leds.setup();
@@ -84,5 +87,11 @@ void Feedback::restarting() {
 #ifdef OLED_ON
     oled.restarting();
     delay(500);
+  #endif
+}
+
+void Feedback::displayIP(const String& ip_address) {
+  #ifdef OLED_ON
+    oled.displayIP(ip_address);
   #endif
 }

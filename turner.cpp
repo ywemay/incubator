@@ -57,3 +57,7 @@ void Turner::stop() {
 }
 
 unsigned int Turner::remained() { return eggsTurnCounter - EGGS_TURN_SECONDS + 1; }
+
+void Turner::resetTimer() {
+  eggsTurnCounter = EGGS_TURNING_INTERVAL;
+}

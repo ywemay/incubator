@@ -24,6 +24,7 @@ class Feedback {
     void stats(float t, float h, unsigned int turning, unsigned int remained, int8_t state);
     void restoreSensor();
     void restarting();
+    void displayIP(const String& ip_address);
 };
 
 #endif

@@ -17,6 +17,7 @@ class Turner {
     void turn();
     void stop();
     unsigned int remained();
+    void resetTimer();
 };
 
 #endif

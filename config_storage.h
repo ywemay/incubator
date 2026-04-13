@@ -41,6 +41,13 @@ public:
     bool saveSystemConfig(const char* key, float value);
     float loadSystemConfig(const char* key, float default_value = 0.0);
     
+    // Incubation tracking
+    bool saveIncubationStart(time_t start_time);
+    time_t loadIncubationStart(time_t default_value = 0);
+    
+    bool saveBirdSpecies(int species);
+    int loadBirdSpecies(int default_value = 0);
+    
     // Factory reset
     bool factoryReset();
     

@@ -12,11 +12,13 @@
 #include "thermo.h"
 #include "turner.h"
 #include "feedback.h"
+#include "incubation_tracker.h"
 
 // Forward declarations
 extern Thermo thermo;
 extern Turner turner;
 extern Feedback feedback;
+extern IncubationTracker incubationTracker;
 
 class WebServerManager {
 private:
@@ -57,6 +59,7 @@ private:
     void handleAPICommand();
     void handleAPITime();
     void handleSystemInfo();
+    void handleIncubationAPI();
     void handleNotFound();
     
     // Helper functions

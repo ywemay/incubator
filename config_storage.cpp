@@ -231,6 +231,57 @@ float ConfigStorage::loadSystemConfig(const char* key, float default_value) {
     return value;
 }
 
+bool ConfigStorage::saveIncubationStart(time_t start_time) {
+    if (!begin()) return false;
+    
+    bool success = preferences.putULong64("incubation_start", static_cast<uint64_t>(start_time));
+    end();
+    
+    if (success) {
+        Serial.printf("[Config] Saved incubation start time: %llu\n", static_cast<unsigned long long>(start_time));
+    } else {
+        Serial.println("[Config] Failed to save incubation start time");
+    }
+    
+    return success;
+}
+
+time_t ConfigStorage::loadIncubationStart(time_t default_value) {
+    if (!begin()) return default_value;
+    
+    uint64_t stored_value = preferences.getULong64("incubation_start", static_cast<uint64_t>(default_value));
+    end();
+    
+    time_t start_time = static_cast<time_t>(stored_value);
+    Serial.printf("[Config] Loaded incubation start time: %llu\n", static_cast<unsigned long long>(start_time));
+    return start_time;
+}
+
+bool ConfigStorage::saveBirdSpecies(int species) {
+    if (!begin()) return false;
+    
+    bool success = preferences.putInt("bird_species", species);
+    end();
+    
+    if (success) {
+        Serial.printf("[Config] Saved bird species: %d\n", species);
+    } else {
+        Serial.println("[Config] Failed to save bird species");
+    }
+    
+    return success;
+}
+
+int ConfigStorage::loadBirdSpecies(int default_value) {
+    if (!begin()) return default_value;
+    
+    int species = preferences.getInt("bird_species", default_value);
+    end();
+    
+    Serial.printf("[Config] Loaded bird species: %d\n", species);
+    return species;
+}
+
 bool ConfigStorage::factoryReset() {
     if (!begin()) return false;
     

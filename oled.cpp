@@ -9,25 +9,47 @@
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-void Oled::setup() {
-
-  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+bool Oled::setup() {
+  int retry_count = 0;
+  bool success = false;
+  
+  // Try to initialize OLED up to 3 times
+  while (retry_count < 3 && !success) {
+    Serial.printf("OLED initialization attempt %d...\n", retry_count + 1);
     
-    beep(400, 600, 4);
-    delay(2000);
-    for(;;);
+    if (display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+      success = true;
+      display_available = true;
+      display.clearDisplay();
+      display.setTextSize(2); 
+      display.setTextColor(SSD1306_WHITE); 
+      display.print("ON");
+      display.display();
+      delay(1000);
+      Serial.println("OLED initialized successfully");
+    } else {
+      retry_count++;
+      if (retry_count < 3) {
+        // Short beep for retry
+        beep(200, 200);
+        delay(1000);
+      }
+    }
   }
-
-  display.clearDisplay();
-  display.setTextSize(2); 
-  display.setTextColor(SSD1306_WHITE); 
-  display.print("ON");
-  display.display();
-  delay(1000);
-
+  
+  if (!success) {
+    // Final failure beep pattern
+    beep(400, 600, 4);
+    display_available = false;
+    Serial.println("OLED initialization failed after 3 attempts. Continuing without display.");
+  }
+  
+  return success;
 }
 
 void Oled::display_sensor (int8_t state) {
+  if (!display_available) return;
+  
   display.clearDisplay();
   display.setTextSize(2);
   display.setCursor(2, 3); 
@@ -52,6 +74,7 @@ void Oled::display_sensor (int8_t state) {
 }
 
 void Oled::stats(float t, float h, unsigned int turning, unsigned int remained, int8_t state) {
+  if (!display_available) return;
   
   display.clearDisplay();
   display.setTextSize(2);
@@ -96,6 +119,8 @@ void Oled::stats(float t, float h, unsigned int turning, unsigned int remained, 
 }
 
 void Oled::restoreSensor() {
+  if (!display_available) return;
+  
   display.clearDisplay();
   display.setTextSize(2);
   display.setCursor(0, 0); 
@@ -107,9 +132,24 @@ void Oled::restoreSensor() {
 
 
 void Oled::restarting() {
+  if (!display_available) return;
+  
   display.clearDisplay();
   display.setTextSize(2);
   display.setCursor(0, 0); 
   display.println("Restart");
+  display.display();
+}
+
+void Oled::displayIP(const String& ip_address) {
+  if (!display_available) return;
+  
+  display.clearDisplay();
+  display.setTextSize(1); // Smaller text for IP address
+  display.setCursor(0, 0); 
+  display.println("IP Address:");
+  display.println("");
+  display.setTextSize(2); // Larger text for the IP
+  display.println(ip_address);
   display.display();
 }

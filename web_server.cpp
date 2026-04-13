@@ -124,6 +124,7 @@ void WebServerManager::setupRoutes() {
     server->on("/api/command", std::bind(&WebServerManager::handleAPICommand, this));
     server->on("/api/time", std::bind(&WebServerManager::handleAPITime, this));
     server->on("/api/system", std::bind(&WebServerManager::handleSystemInfo, this));
+    server->on("/api/incubation", std::bind(&WebServerManager::handleIncubationAPI, this));
     server->onNotFound(std::bind(&WebServerManager::handleNotFound, this));
 }
 
@@ -419,6 +420,49 @@ void WebServerManager::handleRoot() {
                     <div class="stat-value" id="connectedSSID">--</div>
                 </div>
             </div>
+            
+            <!-- Incubation Tracking Card -->
+            <div class="card">
+                <h2>Incubation Tracking</h2>
+                <div class="stat">
+                    <div class="stat-label">Current Status</div>
+                    <div>
+                        <span id="incubationStatus">--</span>
+                        <span class="status-badge" id="incubationBadge">--</span>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Species</div>
+                    <div class="stat-value" id="incubationSpecies">--</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Day</div>
+                    <div class="stat-value" id="incubationDay">--</div>
+                    <div class="stat-unit" id="incubationTotalDays">of -- days</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Time Remaining</div>
+                    <div class="stat-value" id="incubationRemaining">--</div>
+                </div>
+                <div class="controls">
+                    <select id="birdSpecies">
+                        <option value="0">Quail</option>
+                        <option value="1">Chicken</option>
+                        <option value="2">Duck</option>
+                        <option value="3">Goose</option>
+                        <option value="4">Peacock</option>
+                        <option value="5">Turkey</option>
+                        <option value="6">Pheasant</option>
+                        <option value="7">Guinea Fowl</option>
+                        <option value="8">Custom</option>
+                    </select>
+                    <button class="success" onclick="startIncubation()">Start Incubation</button>
+                    <button class="danger" onclick="stopIncubation()">Stop Incubation</button>
+                </div>
+                <div class="alerts" id="incubationAlerts">
+                    <!-- Alerts will appear here -->
+                </div>
+            </div>
         </div>
         
         <div class="last-update" id="lastUpdate">
@@ -471,6 +515,35 @@ void WebServerManager::handleRoot() {
                     // Update configuration form
                     document.getElementById('configTargetTemp').value = data.target_temp;
                     document.getElementById('configTurnInterval').value = data.turn_interval / 3600;
+                    
+                    // Update incubation tracking
+                    document.getElementById('incubationStatus').textContent = 
+                        data.incubation_active ? 'ACTIVE' : 'INACTIVE';
+                    document.getElementById('incubationBadge').textContent = 
+                        data.incubation_active ? 'RUNNING' : 'STOPPED';
+                    document.getElementById('incubationBadge').className = 'status-badge ' + 
+                        (data.incubation_active ? 'status-online' : 'status-offline');
+                    document.getElementById('incubationSpecies').textContent = data.incubation_species;
+                    document.getElementById('incubationDay').textContent = data.incubation_day;
+                    document.getElementById('incubationTotalDays').textContent = 'of ' + 
+                        (data.incubation_day + data.incubation_remaining_days) + ' days';
+                    document.getElementById('incubationRemaining').textContent = data.incubation_remaining_days + ' days';
+                    
+                    // Update alerts
+                    const alertsDiv = document.getElementById('incubationAlerts');
+                    alertsDiv.innerHTML = '';
+                    
+                    if (data.incubation_active) {
+                        if (data.is_candling_day) {
+                            alertsDiv.innerHTML += '<div class="status-badge status-warning">🎯 TODAY: Candling Day!</div>';
+                        }
+                        if (data.is_lockdown_day) {
+                            alertsDiv.innerHTML += '<div class="status-badge status-warning">🔒 LOCKDOWN: Stop Turning!</div>';
+                        }
+                        if (data.is_hatching_day) {
+                            alertsDiv.innerHTML += '<div class="status-badge status-online">🐣 HATCHING DAY!</div>';
+                        }
+                    }
                     
                     // Update last update time
                     const now = new Date();
@@ -546,6 +619,69 @@ void WebServerManager::handleRoot() {
             });
             
             return false; // Prevent form submission
+        }
+        
+        function startIncubation() {
+            const speciesSelect = document.getElementById('birdSpecies');
+            const species = parseInt(speciesSelect.value);
+            
+            if (isNaN(species)) {
+                alert('Please select a bird species');
+                return;
+            }
+            
+            const payload = {
+                command: 'start_incubation',
+                species: species
+            };
+            
+            fetch('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Incubation started successfully');
+                    updateDashboard(); // Refresh data
+                } else {
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error starting incubation:', error);
+                alert('Network error starting incubation');
+            });
+        }
+        
+        function stopIncubation() {
+            if (!confirm('Are you sure you want to stop the current incubation session?')) {
+                return;
+            }
+            
+            const payload = {
+                command: 'stop_incubation'
+            };
+            
+            fetch('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Incubation stopped successfully');
+                    updateDashboard(); // Refresh data
+                } else {
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error stopping incubation:', error);
+                alert('Network error stopping incubation');
+            });
         }
         
         // Start auto-update every 5 seconds
@@ -654,6 +790,93 @@ void WebServerManager::handleSystemInfo() {
     server->send(200, "application/json", json);
 }
 
+void WebServerManager::handleIncubationAPI() {
+    if (!server) return;
+    
+    if (server->method() == HTTP_GET) {
+        // Get incubation status
+        StaticJsonDocument<512> doc;
+        
+        doc["session_active"] = incubationTracker.isSessionActive();
+        doc["species"] = incubationTracker.getSpeciesName();
+        doc["elapsed_days"] = incubationTracker.getElapsedDays();
+        doc["remaining_days"] = incubationTracker.getRemainingDays();
+        doc["is_candling_day"] = incubationTracker.isCandlingDay();
+        doc["is_lockdown_day"] = incubationTracker.isLockdownDay();
+        doc["is_hatching_day"] = incubationTracker.isHatchingDay();
+        doc["time_remaining"] = incubationTracker.getTimeRemainingString();
+        
+        // Add preset information if session is active
+        if (incubationTracker.isSessionActive()) {
+            doc["target_temp"] = incubationTracker.getCurrentTargetTemp();
+            doc["target_humidity"] = incubationTracker.getCurrentTargetHumidity();
+            doc["incubation_days"] = incubationTracker.getCurrentIncubationDays();
+            doc["candling_day"] = incubationTracker.getCurrentCandlingDay();
+            doc["lockdown_day"] = incubationTracker.getCurrentLockdownDay();
+            doc["turn_interval"] = incubationTracker.getCurrentTurnInterval();
+        }
+        
+        String json;
+        serializeJson(doc, json);
+        server->send(200, "application/json", json);
+        
+    } else if (server->method() == HTTP_POST) {
+        // Start/stop incubation session
+        String body = server->arg("plain");
+        
+        StaticJsonDocument<256> doc;
+        DeserializationError error = deserializeJson(doc, body);
+        
+        if (error) {
+            server->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+            return;
+        }
+        
+        bool success = false;
+        String message;
+        
+        if (doc.containsKey("action")) {
+            String action = doc["action"].as<String>();
+            
+            if (action == "start") {
+                if (doc.containsKey("species")) {
+                    int species = doc["species"].as<int>();
+                    time_t start_time = 0;
+                    
+                    if (doc.containsKey("start_time")) {
+                        start_time = doc["start_time"].as<time_t>();
+                    }
+                    
+                    success = incubationTracker.startIncubation(static_cast<BirdSpecies>(species), start_time);
+                    message = success ? "Incubation session started" : "Failed to start incubation session";
+                } else {
+                    message = "Missing species parameter";
+                }
+                
+            } else if (action == "stop") {
+                success = incubationTracker.stopIncubation();
+                message = success ? "Incubation session stopped" : "Failed to stop incubation session";
+                
+            } else if (action == "status") {
+                // Already handled by GET
+                success = true;
+                message = "Status retrieved";
+            }
+        }
+        
+        StaticJsonDocument<128> response;
+        response["success"] = success;
+        response["message"] = message;
+        
+        String json;
+        serializeJson(response, json);
+        server->send(success ? 200 : 400, "application/json", json);
+        
+    } else {
+        server->send(405, "application/json", "{\"success\":false,\"message\":\"Method not allowed\"}");
+    }
+}
+
 void WebServerManager::handleNotFound() {
     if (!server) return;
     
@@ -681,6 +904,15 @@ String WebServerManager::getSystemStatusJSON() {
     doc["wifi_connected"] = wifiManager.isConnected();
     doc["ip_address"] = wifiManager.getIPAddress();
     doc["wifi_ssid"] = wifiManager.getSSID();
+    
+    // Incubation data
+    doc["incubation_active"] = incubationTracker.isSessionActive();
+    doc["incubation_species"] = incubationTracker.getSpeciesName();
+    doc["incubation_day"] = incubationTracker.getElapsedDays();
+    doc["incubation_remaining_days"] = incubationTracker.getRemainingDays();
+    doc["is_candling_day"] = incubationTracker.isCandlingDay();
+    doc["is_lockdown_day"] = incubationTracker.isLockdownDay();
+    doc["is_hatching_day"] = incubationTracker.isHatchingDay();
     
     // Uptime
     unsigned long uptime = millis() / 1000;
@@ -760,6 +992,9 @@ bool WebServerManager::updateConfig(const JsonDocument& doc) {
         if (new_interval >= 3600 && new_interval <= 86400) { // 1 hour to 24 hours
             EGGS_TURNING_INTERVAL = new_interval;
             
+            // Reset the egg turner timer to use the new interval immediately
+            turner.resetTimer();
+            
             // Save to storage
             configStorage.saveTurnInterval(new_interval);
             
@@ -798,7 +1033,7 @@ bool WebServerManager::executeCommand(const String& command, const JsonDocument&
         return true;
     } else if (command == "reset_timer") {
         // Reset egg turner timer
-        // Implementation depends on turner class
+        turner.resetTimer();
         return true;
     } else if (command == "restart") {
         // Restart ESP32
@@ -811,6 +1046,63 @@ bool WebServerManager::executeCommand(const String& command, const JsonDocument&
         wifiManager.clearCredentials();
         // Add other reset logic here
         return true;
+    } else if (command == "start_incubation") {
+        // Start incubation with specified species
+        if (data.containsKey("species")) {
+            int species = data["species"].as<int>();
+            float new_target_temp;
+            unsigned int new_turn_interval;
+            
+            bool success = incubationTracker.startIncubation(
+                static_cast<BirdSpecies>(species), 
+                0, // current time
+                &new_target_temp, 
+                &new_turn_interval
+            );
+            
+            if (success) {
+                // Apply the preset values
+                targetTemp = new_target_temp;
+                EGGS_TURNING_INTERVAL = new_turn_interval;
+                
+                // Reset the egg turner timer to use the new interval immediately
+                turner.resetTimer();
+                
+                // Save to configuration storage
+                configStorage.saveTargetTemperature(new_target_temp);
+                configStorage.saveTurnInterval(new_turn_interval);
+                
+                Serial.printf("[Web] Incubation started. Temp: %.1f°C, Interval: %u seconds\n", 
+                             new_target_temp, new_turn_interval);
+            }
+            
+            return success;
+        }
+        return false;
+    } else if (command == "stop_incubation") {
+        // Stop current incubation session
+        float default_temp;
+        unsigned int default_interval;
+        
+        bool success = incubationTracker.stopIncubation(&default_temp, &default_interval);
+        
+        if (success) {
+            // Restore default values
+            targetTemp = default_temp;
+            EGGS_TURNING_INTERVAL = default_interval;
+            
+            // Reset the egg turner timer to use the new interval immediately
+            turner.resetTimer();
+            
+            // Save to configuration storage
+            configStorage.saveTargetTemperature(default_temp);
+            configStorage.saveTurnInterval(default_interval);
+            
+            Serial.printf("[Web] Incubation stopped. Restored defaults. Temp: %.1f°C, Interval: %u seconds\n", 
+                         default_temp, default_interval);
+        }
+        
+        return success;
     }
     
     return false;
