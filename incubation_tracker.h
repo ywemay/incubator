@@ -6,6 +6,7 @@
 // Conditional compilation for ESP32 only
 #ifdef ESP32
 #include <Preferences.h>
+#include "config.h"
 
 // Bird species presets
 enum BirdSpecies {

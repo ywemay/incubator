@@ -460,8 +460,8 @@ void WebServerManager::handleRoot() {
                         <option value="7">Guinea Fowl</option>
                         <option value="8">Custom</option>
                     </select>
-                    <button class="success" onclick="startIncubation()">Start Incubation</button>
-                    <button class="danger" onclick="stopIncubation()">Stop Incubation</button>
+                    <button class="success" id="startIncubationBtn" onclick="startIncubation()">Start Incubation</button>
+                    <button class="danger" id="stopIncubationBtn" onclick="stopIncubation()">Stop Incubation</button>
                 </div>
                 <div class="controls" style="margin-top: 15px;">
                     <input type="number" id="adjustDays" placeholder="Days to adjust" min="-30" max="30" style="flex: 2;">
@@ -566,6 +566,29 @@ void WebServerManager::handleRoot() {
                         if (data.is_hatching_day) {
                             alertsDiv.innerHTML += '<div class="status-badge status-online">🐣 HATCHING DAY!</div>';
                         }
+                    }
+                    
+                    // Update incubation buttons based on incubator state
+                    const startBtn = document.getElementById('startIncubationBtn');
+                    const stopBtn = document.getElementById('stopIncubationBtn');
+                    const isIncubating = data.incubator_state === 'incubating' || data.incubation_active;
+                    
+                    if (isIncubating) {
+                        // When incubating: disable Start button, enable Stop button
+                        startBtn.disabled = true;
+                        startBtn.style.opacity = '0.5';
+                        startBtn.style.cursor = 'not-allowed';
+                        stopBtn.disabled = false;
+                        stopBtn.style.opacity = '1';
+                        stopBtn.style.cursor = 'pointer';
+                    } else {
+                        // When idle: enable Start button, disable Stop button
+                        startBtn.disabled = false;
+                        startBtn.style.opacity = '1';
+                        startBtn.style.cursor = 'pointer';
+                        stopBtn.disabled = true;
+                        stopBtn.style.opacity = '0.5';
+                        stopBtn.style.cursor = 'not-allowed';
                     }
                     
                     // Update last update time
@@ -1067,13 +1090,18 @@ String WebServerManager::getSystemStatusJSON() {
     doc["wifi_ssid"] = wifiManager.getSSID();
     
     // Incubation data
-    doc["incubation_active"] = incubationTracker.isSessionActive();
+    bool incubation_active = incubationTracker.isSessionActive();
+    doc["incubation_active"] = incubation_active;
     doc["incubation_species"] = incubationTracker.getSpeciesName();
     doc["incubation_day"] = incubationTracker.getElapsedDays();
     doc["incubation_remaining_days"] = incubationTracker.getRemainingDays();
     doc["is_candling_day"] = incubationTracker.isCandlingDay();
     doc["is_lockdown_day"] = incubationTracker.isLockdownDay();
     doc["is_hatching_day"] = incubationTracker.isHatchingDay();
+    
+    // Incubator state
+    doc["incubator_state"] = incubatorState == INCUBATOR_INCUBATING ? "incubating" : "idle";
+    doc["incubator_state_code"] = incubatorState;
     
     // Uptime
     unsigned long uptime = millis() / 1000;

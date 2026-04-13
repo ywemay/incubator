@@ -93,6 +93,11 @@ bool IncubationTracker::startIncubation(BirdSpecies species, time_t start_time,
     
     session_active = true;
     
+    // Update global incubator state
+    #ifdef ESP32
+    incubatorState = INCUBATOR_INCUBATING;
+    #endif
+    
     // Return the preset values if output pointers are provided
     if (out_target_temp) {
         *out_target_temp = getCurrentTargetTemp();
@@ -114,6 +119,11 @@ bool IncubationTracker::stopIncubation(float* out_target_temp,
     
     session_active = false;
     incubation_start_time = 0;
+    
+    // Update global incubator state
+    #ifdef ESP32
+    incubatorState = INCUBATOR_IDLE;
+    #endif
     
     // Return default values if output pointers are provided
     if (out_target_temp) {

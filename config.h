@@ -14,6 +14,16 @@ extern float targetTemp;
 const float targetTemp = 38.0;
 #endif
 
+// Incubator state (extern for ESP32 web interface)
+#ifdef ESP32
+// Incubator state enumeration
+typedef enum {
+    INCUBATOR_IDLE = 0,
+    INCUBATOR_INCUBATING = 1
+} IncubatorState;
+extern IncubatorState incubatorState;
+#endif
+
 // comment/uncomment to enable/disable the usage of NTC type sersor 
 // #define NTC_SENSOR_PIN A3
 //#define NTC_SENSOR_POWER_PIN A4

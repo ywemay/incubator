@@ -9,6 +9,7 @@
 #include "web_server.h"
 #include "config_storage.h"
 #include "incubation_tracker.h"
+#include "config.h"
 #endif
 
 // Global objects
@@ -26,6 +27,9 @@ IncubationTracker incubationTracker;
 // Global configuration variables (defined here for ESP32)
 float targetTemp = 38.0;
 unsigned int EGGS_TURNING_INTERVAL = 8 * 60 * 60;
+
+// Incubator state variable (enum defined in config.h)
+IncubatorState incubatorState = INCUBATOR_IDLE;
 
 #ifdef EGGS_TURNER_PIN
 unsigned int EGGS_TURN_SECONDS = 2;
@@ -70,6 +74,15 @@ void setup() {
   wifiManager.begin();
   webServer.begin();
   incubationTracker.begin();
+  
+  // Initialize incubator state based on active session
+  if (incubationTracker.isSessionActive()) {
+    incubatorState = INCUBATOR_INCUBATING;
+    Serial.println("[Init] Incubator state: INCUBATING (active session found)");
+  } else {
+    incubatorState = INCUBATOR_IDLE;
+    Serial.println("[Init] Incubator state: IDLE");
+  }
   
   // Display IP address on OLED if WiFi is connected
   if (wifiManager.isConnected()) {
