@@ -73,7 +73,8 @@ void Oled::display_sensor (int8_t state) {
   display.display();
 }
 
-void Oled::stats(float t, float h, unsigned int turning, unsigned int remained, int8_t state) {
+void Oled::stats(float t, float h, unsigned int turning, unsigned int remained, int8_t state,
+                 const String& alt_display) {
   if (!display_available) return;
   
   display.clearDisplay();
@@ -102,15 +103,22 @@ void Oled::stats(float t, float h, unsigned int turning, unsigned int remained, 
     if (c < 2) display.print(" ");
     display.print((char) 16);
   } else {
-    unsigned long hours = remained / 3600;
-    unsigned long minutes = (remained % 3600) / 60;
-    unsigned long seconds = remained % 60;
-    display.print(hours);
-    display.print("h ");
-    display.print(minutes);
-    display.print("m ");
-    display.print(seconds);
-    //display.print("s ");
+    // If alt_display is provided, show it instead of remaining time
+    if (!alt_display.isEmpty()) {
+      display.setTextSize(1); // Smaller text for IP address
+      display.print(alt_display);
+    } else {
+      display.setTextSize(2); // Normal text for time
+      unsigned long hours = remained / 3600;
+      unsigned long minutes = (remained % 3600) / 60;
+      unsigned long seconds = remained % 60;
+      display.print(hours);
+      display.print("h ");
+      display.print(minutes);
+      display.print("m ");
+      display.print(seconds);
+      //display.print("s ");
+    }
   }
 
   // display.print(" ");

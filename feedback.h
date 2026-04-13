@@ -25,6 +25,8 @@ class Feedback {
     void restoreSensor();
     void restarting();
     void displayIP(const String& ip_address);
+    void setIPAddress(const String& ip_address);
+    String getIPAddress() const;
 };
 
 #endif

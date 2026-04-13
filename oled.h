@@ -15,7 +15,8 @@ class Oled {
     Oled() : display_available(false) {};
     bool setup();
     void display_sensor(int8_t state);
-    void stats(float t, float h, unsigned int turning, unsigned int remained, int8_t state);
+    void stats(float t, float h, unsigned int turning, unsigned int remained, int8_t state, 
+               const String& alt_display = "");
     void restoreSensor();
     void restarting();
     void displayIP(const String& ip_address);

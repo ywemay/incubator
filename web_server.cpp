@@ -388,6 +388,10 @@ void WebServerManager::handleRoot() {
                     </div>
                 </div>
                 <div class="stat">
+                    <div class="stat-label">Hostname</div>
+                    <div class="stat-value" id="hostname">incubator-esp32</div>
+                </div>
+                <div class="stat">
                     <div class="stat-label">IP Address</div>
                     <div class="stat-value" id="ipAddress">---.---.---.---</div>
                 </div>
@@ -459,6 +463,14 @@ void WebServerManager::handleRoot() {
                     <button class="success" onclick="startIncubation()">Start Incubation</button>
                     <button class="danger" onclick="stopIncubation()">Stop Incubation</button>
                 </div>
+                <div class="controls" style="margin-top: 15px;">
+                    <input type="number" id="adjustDays" placeholder="Days to adjust" min="-30" max="30" style="flex: 2;">
+                    <button onclick="adjustIncubationDays()" style="flex: 1;">Adjust Days</button>
+                </div>
+                <div class="controls" style="margin-top: 15px;">
+                    <input type="number" id="setDay" placeholder="Set to day" min="0" max="50" style="flex: 2;">
+                    <button onclick="setIncubationDay()" style="flex: 1;">Set Day</button>
+                </div>
                 <div class="alerts" id="incubationAlerts">
                     <!-- Alerts will appear here -->
                 </div>
@@ -508,6 +520,7 @@ void WebServerManager::handleRoot() {
                     document.getElementById('wifiStatus').textContent = data.wifi_connected ? 'CONNECTED' : 'DISCONNECTED';
                     document.getElementById('wifiBadge').textContent = data.wifi_connected ? 'ONLINE' : 'OFFLINE';
                     document.getElementById('wifiBadge').className = 'status-badge ' + (data.wifi_connected ? 'status-online' : 'status-offline');
+                    document.getElementById('hostname').textContent = data.hostname;
                     document.getElementById('ipAddress').textContent = data.ip_address;
                     document.getElementById('uptime').textContent = data.uptime;
                     document.getElementById('connectedSSID').textContent = data.wifi_ssid;
@@ -684,6 +697,81 @@ void WebServerManager::handleRoot() {
             });
         }
         
+        function adjustIncubationDays() {
+            const daysInput = document.getElementById('adjustDays');
+            const days = parseInt(daysInput.value);
+            
+            if (isNaN(days)) {
+                alert('Please enter a valid number of days to adjust');
+                return;
+            }
+            
+            if (days === 0) {
+                alert('Please enter a non-zero number of days');
+                return;
+            }
+            
+            const payload = {
+                action: 'adjust_days',
+                days: days
+            };
+            
+            fetch('/api/incubation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Incubation days adjusted by ' + days + ' days');
+                    updateDashboard(); // Refresh data
+                    daysInput.value = ''; // Clear input
+                } else {
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error adjusting incubation days:', error);
+                alert('Network error adjusting incubation days');
+            });
+        }
+        
+        function setIncubationDay() {
+            const dayInput = document.getElementById('setDay');
+            const day = parseInt(dayInput.value);
+            
+            if (isNaN(day) || day < 0) {
+                alert('Please enter a valid day number (0 or higher)');
+                return;
+            }
+            
+            const payload = {
+                action: 'set_day',
+                day: day
+            };
+            
+            fetch('/api/incubation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Incubation set to day ' + day);
+                    updateDashboard(); // Refresh data
+                    dayInput.value = ''; // Clear input
+                } else {
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error setting incubation day:', error);
+                alert('Network error setting incubation day');
+            });
+        }
+        
         // Start auto-update every 5 seconds
         updateInterval = setInterval(updateDashboard, 5000);
         
@@ -857,6 +945,24 @@ void WebServerManager::handleIncubationAPI() {
                 success = incubationTracker.stopIncubation();
                 message = success ? "Incubation session stopped" : "Failed to stop incubation session";
                 
+            } else if (action == "adjust_days") {
+                if (doc.containsKey("days")) {
+                    int days = doc["days"].as<int>();
+                    success = incubationTracker.adjustIncubationDays(days);
+                    message = success ? "Incubation days adjusted" : "Failed to adjust incubation days";
+                } else {
+                    message = "Missing days parameter";
+                }
+                
+            } else if (action == "set_day") {
+                if (doc.containsKey("day")) {
+                    unsigned int day = doc["day"].as<unsigned int>();
+                    success = incubationTracker.setIncubationDay(day);
+                    message = success ? "Incubation day set" : "Failed to set incubation day";
+                } else {
+                    message = "Missing day parameter";
+                }
+                
             } else if (action == "status") {
                 // Already handled by GET
                 success = true;
@@ -902,6 +1008,7 @@ String WebServerManager::getSystemStatusJSON() {
     doc["current_time"] = getFormattedTime();
     doc["current_date"] = getFormattedDate();
     doc["wifi_connected"] = wifiManager.isConnected();
+    doc["hostname"] = wifiManager.getHostname();
     doc["ip_address"] = wifiManager.getIPAddress();
     doc["wifi_ssid"] = wifiManager.getSSID();
     
@@ -954,7 +1061,7 @@ String WebServerManager::getSystemInfoJSON() {
     
     // Network info
     doc["mac_address"] = WiFi.macAddress();
-    doc["hostname"] = WiFi.getHostname();
+    doc["hostname"] = wifiManager.getHostname();
     doc["rssi"] = WiFi.RSSI();
     
     // Software info

@@ -127,6 +127,55 @@ bool IncubationTracker::stopIncubation(float* out_target_temp,
     return clearSession();
 }
 
+bool IncubationTracker::adjustIncubationDays(int days_adjustment) {
+    if (!session_active || !initialized) {
+        return false;
+    }
+    
+    // Calculate new start time based on adjustment
+    time_t now = getCurrentTime();
+    unsigned int elapsed_days = getElapsedDays();
+    
+    // Adjust elapsed days (positive adjustment = fewer days elapsed)
+    int new_elapsed_days = static_cast<int>(elapsed_days) + days_adjustment;
+    
+    // Ensure we don't go negative or beyond incubation period
+    unsigned int incubation_days = getCurrentIncubationDays();
+    if (new_elapsed_days < 0) {
+        new_elapsed_days = 0;
+    } else if (new_elapsed_days > static_cast<int>(incubation_days)) {
+        new_elapsed_days = incubation_days;
+    }
+    
+    // Calculate new start time
+    incubation_start_time = now - (new_elapsed_days * 24 * 60 * 60);
+    
+    Serial.printf("[Incubation] Adjusted by %d days. Now at day %d of %u\n", 
+                 days_adjustment, new_elapsed_days, incubation_days);
+    
+    return saveSession();
+}
+
+bool IncubationTracker::setIncubationDay(unsigned int day_number) {
+    if (!session_active || !initialized) {
+        return false;
+    }
+    
+    // Ensure day number is valid
+    unsigned int incubation_days = getCurrentIncubationDays();
+    if (day_number > incubation_days) {
+        day_number = incubation_days;
+    }
+    
+    // Calculate new start time
+    time_t now = getCurrentTime();
+    incubation_start_time = now - (day_number * 24 * 60 * 60);
+    
+    Serial.printf("[Incubation] Set to day %u of %u\n", day_number, incubation_days);
+    
+    return saveSession();
+}
+
 unsigned long IncubationTracker::getElapsedSeconds() const {
     if (!session_active || incubation_start_time == 0) {
         return 0;

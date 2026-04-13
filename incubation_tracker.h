@@ -60,6 +60,8 @@ public:
                         unsigned int* out_turn_interval = nullptr);
     bool stopIncubation(float* out_target_temp = nullptr, 
                        unsigned int* out_turn_interval = nullptr);
+    bool adjustIncubationDays(int days_adjustment);
+    bool setIncubationDay(unsigned int day_number);
     bool isSessionActive() const { return session_active; }
     
     // Time calculations
@@ -124,6 +126,8 @@ public:
         if (out_turn_interval) *out_turn_interval = 8 * 60 * 60;
         return false; 
     }
+    bool adjustIncubationDays(int days_adjustment) { return false; }
+    bool setIncubationDay(unsigned int day_number) { return false; }
     bool isSessionActive() const { return false; }
     unsigned long getElapsedSeconds() const { return 0; }
     unsigned int getElapsedDays() const { return 0; }

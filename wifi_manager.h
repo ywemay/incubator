@@ -45,6 +45,7 @@ public:
     bool isAPModeActive() const { return ap_mode_active; }
     String getIPAddress() const;
     String getSSID() const { return String(wifi_ssid); }
+    String getHostname() const;
     
     // Configuration
     bool hasCredentials() const;
@@ -88,6 +89,7 @@ public:
     bool isAPModeActive() const { return false; }
     String getIPAddress() const { return "N/A"; }
     String getSSID() const { return "N/A"; }
+    String getHostname() const { return "incubator-esp32"; }
     bool hasCredentials() const { return false; }
     void clearCredentials() { /* No-op */ }
 };

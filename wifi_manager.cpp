@@ -9,6 +9,9 @@
 #define AP_PASSWORD "setup12345"
 #define CONFIG_PORTAL_TIMEOUT 300000 // 5 minutes
 
+// Device hostname (for network discovery)
+#define DEVICE_HOSTNAME "incubator-esp32"
+
 WiFiManager::WiFiManager() :
     wifi_connected(false),
     ap_mode_active(false),
@@ -31,6 +34,10 @@ WiFiManager::~WiFiManager() {
 
 void WiFiManager::begin() {
     Serial.println("[WiFi] Initializing WiFi Manager");
+    
+    // Set hostname for network discovery
+    WiFi.setHostname(DEVICE_HOSTNAME);
+    Serial.printf("[WiFi] Hostname set to: %s\n", DEVICE_HOSTNAME);
     
     // Initialize preferences
     preferences.begin("incubator", false);
@@ -453,6 +460,10 @@ String WiFiManager::getIPAddress() const {
         return WiFi.localIP().toString();
     }
     return "0.0.0.0";
+}
+
+String WiFiManager::getHostname() const {
+    return String(DEVICE_HOSTNAME);
 }
 
 bool WiFiManager::hasCredentials() const {

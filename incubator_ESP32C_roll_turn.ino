@@ -75,6 +75,7 @@ void setup() {
   if (wifiManager.isConnected()) {
     String ip_address = wifiManager.getIPAddress();
     Serial.printf("WiFi connected. IP: %s\n", ip_address.c_str());
+    feedback.setIPAddress(ip_address); // Store for cycling display
     feedback.displayIP(ip_address);
     delay(3000); // Show IP for 3 seconds
   }
@@ -140,8 +141,12 @@ void loop() {
     // WiFi just connected
     String ip_address = wifiManager.getIPAddress();
     Serial.printf("WiFi connected. IP: %s\n", ip_address.c_str());
+    feedback.setIPAddress(ip_address); // Store for cycling display
     feedback.displayIP(ip_address);
     delay(2000); // Show IP for 2 seconds
+  } else if (!current_wifi_status && last_wifi_status) {
+    // WiFi disconnected
+    feedback.setIPAddress(""); // Clear IP address
   }
   last_wifi_status = current_wifi_status;
   

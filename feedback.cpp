@@ -8,6 +8,12 @@ Oled oled;
   Leds leds;
 #endif
 
+// IP address for display cycling
+String current_ip_address = "";
+unsigned long last_display_switch = 0;
+bool show_ip_on_display = false;
+const unsigned long DISPLAY_SWITCH_INTERVAL = 5000; // Switch every 5 seconds
+
 void Feedback::setup() {
   setup_beeper();
   #ifdef OLED_ON
@@ -64,7 +70,19 @@ void Feedback::display_sensor (int8_t state) {
 
 void Feedback::stats(float t, float h, unsigned int turning, unsigned int remained, int8_t state) {
   #ifdef OLED_ON
-    oled.stats(t, h, turning, remained, state);
+    // Check if we should switch display mode
+    unsigned long current_time = millis();
+    if (current_time - last_display_switch > DISPLAY_SWITCH_INTERVAL) {
+      show_ip_on_display = !show_ip_on_display;
+      last_display_switch = current_time;
+    }
+    
+    // If we have an IP address and it's time to show it, display IP instead of remaining time
+    if (show_ip_on_display && !current_ip_address.isEmpty()) {
+      oled.stats(t, h, turning, 0, state, current_ip_address);
+    } else {
+      oled.stats(t, h, turning, remained, state);
+    }
   #endif
 
   #ifdef LEDS_ON
@@ -94,4 +112,12 @@ void Feedback::displayIP(const String& ip_address) {
   #ifdef OLED_ON
     oled.displayIP(ip_address);
   #endif
+}
+
+void Feedback::setIPAddress(const String& ip_address) {
+  current_ip_address = ip_address;
+}
+
+String Feedback::getIPAddress() const {
+  return current_ip_address;
 }
