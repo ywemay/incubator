@@ -2,7 +2,7 @@
 #define __CONFIG_H__
 
 // use or not Oled screen
-#define OLED_ON
+// #define OLED_ON
 // LED based feedback
 // #define LEDS_ON
 
