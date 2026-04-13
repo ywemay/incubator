@@ -367,7 +367,7 @@ void WebServerManager::handleRoot() {
                     </div>
                 </div>
                 <div class="controls">
-                    <button class="success" onclick="sendCommand('turn_now')">Turn Now</button>
+                    <button class="success" id="turnButton" onclick="toggleTurn()">Turn Now</button>
                     <button onclick="sendCommand('reset_timer')">Reset Timer</button>
                 </div>
             </div>
@@ -514,6 +514,16 @@ void WebServerManager::handleRoot() {
                     document.getElementById('turnerBadge').textContent = data.turner_active ? 'TURNING' : 'WAITING';
                     document.getElementById('turnerBadge').className = 'status-badge ' + (data.turner_active ? 'status-warning' : 'status-online');
                     
+                    // Update turn button based on turner status
+                    const turnButton = document.getElementById('turnButton');
+                    if (data.turner_turning) {
+                        turnButton.textContent = 'Stop Turning';
+                        turnButton.className = 'danger';
+                    } else {
+                        turnButton.textContent = 'Turn Now';
+                        turnButton.className = 'success';
+                    }
+                    
                     // Update system info
                     document.getElementById('currentTime').textContent = data.current_time;
                     document.getElementById('currentDate').textContent = data.current_date;
@@ -568,6 +578,40 @@ void WebServerManager::handleRoot() {
                 .catch(error => {
                     console.error('Error updating dashboard:', error);
                 });
+        }
+        
+        function toggleTurn() {
+            const turnButton = document.getElementById('turnButton');
+            const isTurning = turnButton.textContent === 'Stop Turning';
+            
+            const command = isTurning ? 'stop_turning' : 'turn_now';
+            const payload = { command: command };
+            
+            fetch('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update button immediately for better UX
+                    if (isTurning) {
+                        turnButton.textContent = 'Turn Now';
+                        turnButton.className = 'success';
+                    } else {
+                        turnButton.textContent = 'Stop Turning';
+                        turnButton.className = 'danger';
+                    }
+                    updateDashboard(); // Refresh all data
+                } else {
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error sending command:', error);
+                alert('Network error sending command');
+            });
         }
         
         function sendCommand(command) {
@@ -1002,7 +1046,17 @@ String WebServerManager::getSystemStatusJSON() {
     // Egg turner data
     doc["next_turn_seconds"] = turner.remained();
     doc["turn_interval"] = EGGS_TURNING_INTERVAL;
-    doc["turner_active"] = digitalRead(EGGS_TURNER_PIN);
+    #ifdef EGGS_TURNER_PIN
+    // Read the turner pin state to determine if motor is currently ON
+    // Note: This only works for relay mode, not servo mode
+    bool turner_active = digitalRead(EGGS_TURNER_PIN);
+    doc["turner_active"] = turner_active;
+    doc["turner_turning"] = turner_active;
+    #else
+    // For servo mode or when turner pin is not defined
+    doc["turner_active"] = false;
+    doc["turner_turning"] = false;
+    #endif
     
     // System data
     doc["current_time"] = getFormattedTime();
@@ -1152,6 +1206,10 @@ bool WebServerManager::executeCommand(const String& command, const JsonDocument&
         // Clear all settings
         wifiManager.clearCredentials();
         // Add other reset logic here
+        return true;
+    } else if (command == "stop_turning") {
+        // Stop the egg turner immediately
+        turner.stop();
         return true;
     } else if (command == "start_incubation") {
         // Start incubation with specified species
