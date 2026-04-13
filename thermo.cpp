@@ -1,4 +1,4 @@
-#include <thermo.h>
+#include "thermo.h"
 
 #ifdef AM2302_SENSOR_PIN
 AM2302::AM2302_Sensor am2302{AM2302_SENSOR_PIN};
@@ -110,7 +110,7 @@ int8_t Thermo::adjust() {
     beep(1000, 200, 3);
     // wait for cooling
     if (runsCount < 2) delay(5000);
-    ESP.restart();
+    // ESP.restart();
   }
 
   if (runsCount <=2) runsCount++;

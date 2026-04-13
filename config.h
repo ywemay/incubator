@@ -6,14 +6,13 @@
 // LED based feedback
 // #define LEDS_ON
 
-#ifdef LEDS_ON
-#define LED_COLD A0
-#define LED_OK A1
-#define LED_HOT A2
-#endif
 
-// target temperature, celsius
+// target temperature, celsius (extern for ESP32 web interface)
+#ifdef ESP32
+extern float targetTemp;
+#else
 const float targetTemp = 38.0;
+#endif
 
 // comment/uncomment to enable/disable the usage of NTC type sersor 
 // #define NTC_SENSOR_PIN A3
@@ -27,24 +26,52 @@ const float targetTemp = 38.0;
 #define Rref 9890   //Value of  resistor used for the voltage divider
 #endif
 
-#define FAN_PIN 20
-#define LIGHT_PIN 21
-// comment/uncomment to enable/disable the usage of AM2302 type thermo/humidity sensor
-#define AM2302_SENSOR_PIN 5
-constexpr unsigned int HEATER_PIN {6U};
+// --- Pin constants definition --
 
+#ifdef LEDS_ON
+#define LED_COLD A0
+#define LED_OK A1
+#define LED_HOT A2
+#endif
+
+#if defined(ARDUINO_AVR_UNO)
+  #define FAN_PIN 9
+  #define LIGHT_PIN 10
+#else
+  #define FAN_PIN 20
+  #define LIGHT_PIN 21
+#endif
+
+#define AM2302_SENSOR_PIN 5
+#define HEATER_PIN 6
 #define EGGS_TURNER_PIN 10
 // #define EGGS_TURNER_SERVO_PIN 21
 #define BEEPER_PIN 7
 
+
 #ifdef EGGS_TURNER_PIN
+#ifdef ESP32
+extern unsigned int EGGS_TURN_SECONDS;
+#else
 const unsigned int EGGS_TURN_SECONDS = 2;
 #endif
+#endif
+
 #ifdef EGGS_TURNER_SERVO_PIN
+#ifdef ESP32
+extern unsigned int EGGS_TURN_SERVER_STEPS;
+extern unsigned int EGGS_TURN_SECONDS;
+#else
 const unsigned int EGGS_TURN_SERVER_STEPS = 5;
 const unsigned int EGGS_TURN_SECONDS = (unsigned int) (180 / EGGS_TURN_SERVER_STEPS);
 #endif
+#endif
 
+// Egg turning interval (extern for ESP32 web interface)
+#ifdef ESP32
+extern unsigned int EGGS_TURNING_INTERVAL;
+#else
 const unsigned int EGGS_TURNING_INTERVAL = 8 * 60 * 60;
+#endif
 
 #endif

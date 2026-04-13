@@ -1,0 +1,829 @@
+#include "web_server.h"
+#include "wifi_manager.h"
+#include "config_storage.h"
+
+// Only compile for ESP32
+#ifdef ESP32
+
+// External managers
+extern WiFiManager wifiManager;
+extern ConfigStorage configStorage;
+
+WebServerManager::WebServerManager() : 
+    server(nullptr),
+    server_active(false)
+{
+}
+
+WebServerManager::~WebServerManager() {
+    if (server) {
+        delete server;
+        server = nullptr;
+    }
+}
+
+void WebServerManager::begin() {
+    // Only start if WiFi is connected
+    if (!wifiManager.isConnected()) {
+        Serial.println("[Web] WiFi not connected, skipping web server start");
+        return;
+    }
+    
+    Serial.println("[Web] Starting web server");
+    
+    server = new WebServer(80);
+    setupRoutes();
+    server->begin();
+    
+    server_active = true;
+    
+    // Sync time if connected
+    syncTime();
+    
+    Serial.printf("[Web] Server started on http://%s\n", wifiManager.getIPAddress().c_str());
+}
+
+void WebServerManager::loop() {
+    if (server_active && server) {
+        server->handleClient();
+    }
+    
+    // Restart server if WiFi connection state changes
+    static bool last_wifi_state = false;
+    bool current_wifi_state = wifiManager.isConnected();
+    
+    if (current_wifi_state != last_wifi_state) {
+        if (current_wifi_state && !server_active) {
+            Serial.println("[Web] WiFi connected, starting web server");
+            begin();
+        } else if (!current_wifi_state && server_active) {
+            Serial.println("[Web] WiFi disconnected, stopping web server");
+            if (server) {
+                server->stop();
+                delete server;
+                server = nullptr;
+            }
+            server_active = false;
+        }
+        last_wifi_state = current_wifi_state;
+    }
+}
+
+void WebServerManager::syncTime() {
+    if (!wifiManager.isConnected()) {
+        Serial.println("[Web] Cannot sync time: WiFi not connected");
+        return;
+    }
+    
+    Serial.println("[Web] Synchronizing time with NTP servers");
+    
+    configTime(gmt_offset_sec, daylight_offset_sec, ntp_server1, ntp_server2);
+    
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        Serial.println("[Web] Failed to obtain time");
+        return;
+    }
+    
+    Serial.println(&timeinfo, "[Web] Time synchronized: %A, %B %d %Y %H:%M:%S");
+}
+
+String WebServerManager::getFormattedTime() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        return "Not synchronized";
+    }
+    
+    char buffer[20];
+    strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
+    return String(buffer);
+}
+
+String WebServerManager::getFormattedDate() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        return "Not synchronized";
+    }
+    
+    char buffer[30];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %A", &timeinfo);
+    return String(buffer);
+}
+
+bool WebServerManager::isTimeSynced() {
+    struct tm timeinfo;
+    return getLocalTime(&timeinfo);
+}
+
+void WebServerManager::setupRoutes() {
+    if (!server) return;
+    
+    server->on("/", std::bind(&WebServerManager::handleRoot, this));
+    server->on("/api/status", std::bind(&WebServerManager::handleAPIStatus, this));
+    server->on("/api/config", std::bind(&WebServerManager::handleAPIConfig, this));
+    server->on("/api/command", std::bind(&WebServerManager::handleAPICommand, this));
+    server->on("/api/time", std::bind(&WebServerManager::handleAPITime, this));
+    server->on("/api/system", std::bind(&WebServerManager::handleSystemInfo, this));
+    server->onNotFound(std::bind(&WebServerManager::handleNotFound, this));
+}
+
+void WebServerManager::handleRoot() {
+    if (!server) return;
+    
+    String html = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 Incubator Controller</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+        }
+        header { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            color: white;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        h1 { 
+            margin: 0; 
+            font-size: 2.5em; 
+        }
+        .subtitle { 
+            opacity: 0.9; 
+            font-size: 1.1em; 
+            margin-top: 5px;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        .card h2 {
+            margin-top: 0;
+            color: #4a5568;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .stat {
+            margin-bottom: 15px;
+        }
+        .stat-label {
+            font-weight: 600;
+            color: #718096;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #2d3748;
+            margin: 5px 0;
+        }
+        .stat-unit {
+            color: #a0aec0;
+            font-size: 0.9em;
+        }
+        .temp-hot { color: #e53e3e; }
+        .temp-ok { color: #38a169; }
+        .temp-cold { color: #3182ce; }
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        button {
+            background: #4c51bf;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s;
+            flex: 1;
+            min-width: 120px;
+        }
+        button:hover {
+            background: #434190;
+        }
+        button.danger {
+            background: #e53e3e;
+        }
+        button.danger:hover {
+            background: #c53030;
+        }
+        button.success {
+            background: #38a169;
+        }
+        button.success:hover {
+            background: #2f855a;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .status-online { background: #c6f6d5; color: #22543d; }
+        .status-offline { background: #fed7d7; color: #742a2a; }
+        .status-warning { background: #feebc8; color: #744210; }
+        .config-form {
+            display: grid;
+            gap: 15px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        input, select {
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #4c51bf;
+        }
+        .last-update {
+            text-align: center;
+            color: #a0aec0;
+            font-size: 0.9em;
+            margin-top: 20px;
+        }
+        .network-info {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            body {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🥚 ESP32 Incubator Controller</h1>
+            <div class="subtitle">Smart incubation with remote monitoring</div>
+        </header>
+        
+        <div class="dashboard">
+            <!-- Temperature & Humidity Card -->
+            <div class="card">
+                <h2>Climate Control</h2>
+                <div class="stat">
+                    <div class="stat-label">Current Temperature</div>
+                    <div class="stat-value" id="temperature">--.-</div>
+                    <div class="stat-unit">°C</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Current Humidity</div>
+                    <div class="stat-value" id="humidity">--.-</div>
+                    <div class="stat-unit">%</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Target Temperature</div>
+                    <div class="stat-value" id="targetTemp">--.-</div>
+                    <div class="stat-unit">°C</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Heater Status</div>
+                    <div>
+                        <span id="heaterStatus">--</span>
+                        <span class="status-badge" id="heaterBadge">--</span>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Fan Status</div>
+                    <div>
+                        <span id="fanStatus">--</span>
+                        <span class="status-badge" id="fanBadge">--</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Egg Turner Card -->
+            <div class="card">
+                <h2>Egg Turner</h2>
+                <div class="stat">
+                    <div class="stat-label">Next Turn In</div>
+                    <div class="stat-value" id="nextTurn">--:--</div>
+                    <div class="stat-unit">HH:MM</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Turn Interval</div>
+                    <div class="stat-value" id="turnInterval">--</div>
+                    <div class="stat-unit">hours</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Turner Status</div>
+                    <div>
+                        <span id="turnerStatus">--</span>
+                        <span class="status-badge" id="turnerBadge">--</span>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button class="success" onclick="sendCommand('turn_now')">Turn Now</button>
+                    <button onclick="sendCommand('reset_timer')">Reset Timer</button>
+                </div>
+            </div>
+            
+            <!-- System Info Card -->
+            <div class="card">
+                <h2>System Information</h2>
+                <div class="stat">
+                    <div class="stat-label">Current Time</div>
+                    <div class="stat-value" id="currentTime">--:--:--</div>
+                    <div class="stat-unit" id="currentDate">---- -- --</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">WiFi Connection</div>
+                    <div>
+                        <span id="wifiStatus">--</span>
+                        <span class="status-badge" id="wifiBadge">--</span>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">IP Address</div>
+                    <div class="stat-value" id="ipAddress">---.---.---.---</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Uptime</div>
+                    <div class="stat-value" id="uptime">--:--:--</div>
+                </div>
+                <div class="controls">
+                    <button onclick="sendCommand('restart')">Restart System</button>
+                    <button class="danger" onclick="sendCommand('factory_reset')">Factory Reset</button>
+                </div>
+            </div>
+            
+            <!-- Configuration Card -->
+            <div class="card">
+                <h2>Configuration</h2>
+                <form class="config-form" onsubmit="return updateConfig()">
+                    <div class="form-group">
+                        <label for="configTargetTemp">Target Temperature (°C)</label>
+                        <input type="number" id="configTargetTemp" step="0.1" min="35" max="42" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="configTurnInterval">Turn Interval (hours)</label>
+                        <input type="number" id="configTurnInterval" min="1" max="24" required>
+                    </div>
+                    <button type="submit" class="success">Update Configuration</button>
+                </form>
+                <div class="network-info">
+                    <div class="stat-label">Connected to WiFi:</div>
+                    <div class="stat-value" id="connectedSSID">--</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="last-update" id="lastUpdate">
+            Last updated: <span id="updateTime">--:--:--</span>
+        </div>
+    </div>
+    
+    <script>
+        let updateInterval;
+        
+        function updateDashboard() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    // Update temperature/humidity
+                    document.getElementById('temperature').textContent = data.temperature.toFixed(1);
+                    document.getElementById('humidity').textContent = data.humidity.toFixed(1);
+                    document.getElementById('targetTemp').textContent = data.target_temp.toFixed(1);
+                    
+                    // Update heater/fan status
+                    document.getElementById('heaterStatus').textContent = data.heater_on ? 'ON' : 'OFF';
+                    document.getElementById('heaterBadge').textContent = data.heater_on ? 'HEATING' : 'IDLE';
+                    document.getElementById('heaterBadge').className = 'status-badge ' + (data.heater_on ? 'status-warning' : 'status-online');
+                    
+                    document.getElementById('fanStatus').textContent = data.fan_on ? 'ON' : 'OFF';
+                    document.getElementById('fanBadge').textContent = data.fan_on ? 'RUNNING' : 'STOPPED';
+                    document.getElementById('fanBadge').className = 'status-badge ' + (data.fan_on ? 'status-online' : 'status-offline');
+                    
+                    // Update egg turner
+                    const hours = Math.floor(data.next_turn_seconds / 3600);
+                    const minutes = Math.floor((data.next_turn_seconds % 3600) / 60);
+                    document.getElementById('nextTurn').textContent = 
+                        hours.toString().padStart(2, '0') + ':' + minutes.toString().padStart(2, '0');
+                    
+                    document.getElementById('turnInterval').textContent = (data.turn_interval / 3600).toFixed(0);
+                    document.getElementById('turnerStatus').textContent = data.turner_active ? 'ACTIVE' : 'IDLE';
+                    document.getElementById('turnerBadge').textContent = data.turner_active ? 'TURNING' : 'WAITING';
+                    document.getElementById('turnerBadge').className = 'status-badge ' + (data.turner_active ? 'status-warning' : 'status-online');
+                    
+                    // Update system info
+                    document.getElementById('currentTime').textContent = data.current_time;
+                    document.getElementById('currentDate').textContent = data.current_date;
+                    document.getElementById('wifiStatus').textContent = data.wifi_connected ? 'CONNECTED' : 'DISCONNECTED';
+                    document.getElementById('wifiBadge').textContent = data.wifi_connected ? 'ONLINE' : 'OFFLINE';
+                    document.getElementById('wifiBadge').className = 'status-badge ' + (data.wifi_connected ? 'status-online' : 'status-offline');
+                    document.getElementById('ipAddress').textContent = data.ip_address;
+                    document.getElementById('uptime').textContent = data.uptime;
+                    document.getElementById('connectedSSID').textContent = data.wifi_ssid;
+                    
+                    // Update configuration form
+                    document.getElementById('configTargetTemp').value = data.target_temp;
+                    document.getElementById('configTurnInterval').value = data.turn_interval / 3600;
+                    
+                    // Update last update time
+                    const now = new Date();
+                    document.getElementById('updateTime').textContent = 
+                        now.getHours().toString().padStart(2, '0') + ':' +
+                        now.getMinutes().toString().padStart(2, '0') + ':' +
+                        now.getSeconds().toString().padStart(2, '0');
+                })
+                .catch(error => {
+                    console.error('Error updating dashboard:', error);
+                });
+        }
+        
+        function sendCommand(command) {
+            const payload = { command: command };
+            
+            fetch('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Command executed successfully');
+                    updateDashboard(); // Refresh data
+                } else {
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error sending command:', error);
+                alert('Network error sending command');
+            });
+        }
+        
+        function updateConfig() {
+            const targetTemp = parseFloat(document.getElementById('configTargetTemp').value);
+            const turnInterval = parseInt(document.getElementById('configTurnInterval').value);
+            
+            if (isNaN(targetTemp) || targetTemp < 35 || targetTemp > 42) {
+                alert('Target temperature must be between 35°C and 42°C');
+                return false;
+            }
+            
+            if (isNaN(turnInterval) || turnInterval < 1 || turnInterval > 24) {
+                alert('Turn interval must be between 1 and 24 hours');
+                return false;
+            }
+            
+            const payload = {
+                target_temp: targetTemp,
+                turn_interval: turnInterval * 3600 // Convert hours to seconds
+            };
+            
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Configuration updated successfully');
+                    updateDashboard(); // Refresh data
+                } else {
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error updating config:', error);
+                alert('Network error updating configuration');
+            });
+            
+            return false; // Prevent form submission
+        }
+        
+        // Start auto-update every 5 seconds
+        updateInterval = setInterval(updateDashboard, 5000);
+        
+        // Initial update
+        updateDashboard();
+        
+        // Stop auto-update when page is hidden
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                clearInterval(updateInterval);
+            } else {
+                updateInterval = setInterval(updateDashboard, 5000);
+                updateDashboard();
+            }
+        });
+    </script>
+</body>
+</html>
+)rawliteral";
+    
+    server->send(200, "text/html", html);
+}
+
+void WebServerManager::handleAPIStatus() {
+    if (!server) return;
+    
+    String json = getSystemStatusJSON();
+    server->send(200, "application/json", json);
+}
+
+void WebServerManager::handleAPIConfig() {
+    if (!server) return;
+    
+    if (server->method() == HTTP_GET) {
+        String json = getSystemConfigJSON();
+        server->send(200, "application/json", json);
+    } else if (server->method() == HTTP_POST) {
+        String body = server->arg("plain");
+        
+        StaticJsonDocument<256> doc;
+        DeserializationError error = deserializeJson(doc, body);
+        
+        if (error) {
+            server->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+            return;
+        }
+        
+        bool success = updateConfig(doc);
+        
+        if (success) {
+            server->send(200, "application/json", "{\"success\":true,\"message\":\"Configuration updated\"}");
+        } else {
+            server->send(400, "application/json", "{\"success\":false,\"message\":\"Failed to update configuration\"}");
+        }
+    }
+}
+
+void WebServerManager::handleAPICommand() {
+    if (!server) return;
+    
+    if (server->method() != HTTP_POST) {
+        server->send(405, "application/json", "{\"success\":false,\"message\":\"Method not allowed\"}");
+        return;
+    }
+    
+    String body = server->arg("plain");
+    
+    StaticJsonDocument<256> doc;
+    DeserializationError error = deserializeJson(doc, body);
+    
+    if (error || !doc.containsKey("command")) {
+        server->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid command\"}");
+        return;
+    }
+    
+    String command = doc["command"].as<String>();
+    bool success = executeCommand(command, doc);
+    
+    if (success) {
+        server->send(200, "application/json", "{\"success\":true,\"message\":\"Command executed\"}");
+    } else {
+        server->send(400, "application/json", "{\"success\":false,\"message\":\"Failed to execute command\"}");
+    }
+}
+
+void WebServerManager::handleAPITime() {
+    if (!server) return;
+    
+    StaticJsonDocument<200> doc;
+    doc["current_time"] = getFormattedTime();
+    doc["current_date"] = getFormattedDate();
+    doc["time_synced"] = isTimeSynced();
+    doc["timestamp"] = time(nullptr);
+    
+    String json;
+    serializeJson(doc, json);
+    server->send(200, "application/json", json);
+}
+
+void WebServerManager::handleSystemInfo() {
+    if (!server) return;
+    
+    String json = getSystemInfoJSON();
+    server->send(200, "application/json", json);
+}
+
+void WebServerManager::handleNotFound() {
+    if (!server) return;
+    
+    server->send(404, "text/plain", "Not found");
+}
+
+String WebServerManager::getSystemStatusJSON() {
+    StaticJsonDocument<512> doc;
+    
+    // Climate data
+    doc["temperature"] = thermo.temperature();
+    doc["humidity"] = thermo.humidity();
+    doc["target_temp"] = targetTemp;
+    doc["heater_on"] = digitalRead(HEATER_PIN);
+    doc["fan_on"] = thermo.fanOn;
+    
+    // Egg turner data
+    doc["next_turn_seconds"] = turner.remained();
+    doc["turn_interval"] = EGGS_TURNING_INTERVAL;
+    doc["turner_active"] = digitalRead(EGGS_TURNER_PIN);
+    
+    // System data
+    doc["current_time"] = getFormattedTime();
+    doc["current_date"] = getFormattedDate();
+    doc["wifi_connected"] = wifiManager.isConnected();
+    doc["ip_address"] = wifiManager.getIPAddress();
+    doc["wifi_ssid"] = wifiManager.getSSID();
+    
+    // Uptime
+    unsigned long uptime = millis() / 1000;
+    unsigned long hours = uptime / 3600;
+    unsigned long minutes = (uptime % 3600) / 60;
+    unsigned long seconds = uptime % 60;
+    char uptimeStr[20];
+    snprintf(uptimeStr, sizeof(uptimeStr), "%02lu:%02lu:%02lu", hours, minutes, seconds);
+    doc["uptime"] = uptimeStr;
+    
+    String json;
+    serializeJson(doc, json);
+    return json;
+}
+
+String WebServerManager::getSystemConfigJSON() {
+    StaticJsonDocument<256> doc;
+    
+    doc["target_temp"] = targetTemp;
+    doc["turn_interval"] = EGGS_TURNING_INTERVAL;
+    doc["wifi_ssid"] = wifiManager.getSSID();
+    
+    String json;
+    serializeJson(doc, json);
+    return json;
+}
+
+String WebServerManager::getSystemInfoJSON() {
+    StaticJsonDocument<512> doc;
+    
+    // Hardware info
+    doc["chip_model"] = "ESP32-C3";
+    doc["chip_revision"] = ESP.getChipRevision();
+    doc["cpu_freq_mhz"] = ESP.getCpuFreqMHz();
+    doc["flash_size"] = ESP.getFlashChipSize();
+    doc["free_heap"] = ESP.getFreeHeap();
+    doc["sketch_size"] = ESP.getSketchSize();
+    doc["free_sketch_space"] = ESP.getFreeSketchSpace();
+    
+    // Network info
+    doc["mac_address"] = WiFi.macAddress();
+    doc["hostname"] = WiFi.getHostname();
+    doc["rssi"] = WiFi.RSSI();
+    
+    // Software info
+    doc["sdk_version"] = ESP.getSdkVersion();
+    doc["compile_date"] = __DATE__;
+    doc["compile_time"] = __TIME__;
+    
+    String json;
+    serializeJson(doc, json);
+    return json;
+}
+
+bool WebServerManager::updateConfig(const JsonDocument& doc) {
+    bool updated = false;
+    
+    // Update target temperature
+    if (doc.containsKey("target_temp")) {
+        float new_temp = doc["target_temp"].as<float>();
+        if (new_temp >= 35.0 && new_temp <= 42.0) {
+            targetTemp = new_temp;
+            
+            // Save to storage
+            configStorage.saveTargetTemperature(new_temp);
+            
+            Serial.printf("[Web] Target temperature updated to: %.1f°C\n", new_temp);
+            updated = true;
+        } else {
+            Serial.printf("[Web] Invalid target temperature: %.1f°C\n", new_temp);
+        }
+    }
+    
+    // Update turn interval
+    if (doc.containsKey("turn_interval")) {
+        unsigned int new_interval = doc["turn_interval"].as<unsigned int>();
+        if (new_interval >= 3600 && new_interval <= 86400) { // 1 hour to 24 hours
+            EGGS_TURNING_INTERVAL = new_interval;
+            
+            // Save to storage
+            configStorage.saveTurnInterval(new_interval);
+            
+            unsigned int hours = new_interval / 3600;
+            unsigned int minutes = (new_interval % 3600) / 60;
+            Serial.printf("[Web] Turn interval updated to: %u hours %u minutes\n", hours, minutes);
+            updated = true;
+        } else {
+            Serial.printf("[Web] Invalid turn interval: %u seconds\n", new_interval);
+        }
+    }
+    
+    // Update turn duration (if using relay)
+    if (doc.containsKey("turn_duration")) {
+        unsigned int new_duration = doc["turn_duration"].as<unsigned int>();
+        if (new_duration >= 1 && new_duration <= 60) {
+            #ifdef EGGS_TURNER_PIN
+            EGGS_TURN_SECONDS = new_duration;
+            
+            // Save to storage
+            configStorage.saveTurnDuration(new_duration);
+            
+            Serial.printf("[Web] Turn duration updated to: %u seconds\n", new_duration);
+            updated = true;
+            #endif
+        }
+    }
+    
+    return updated;
+}
+
+bool WebServerManager::executeCommand(const String& command, const JsonDocument& data) {
+    if (command == "turn_now") {
+        // Trigger egg turner immediately
+        turner.turn();
+        return true;
+    } else if (command == "reset_timer") {
+        // Reset egg turner timer
+        // Implementation depends on turner class
+        return true;
+    } else if (command == "restart") {
+        // Restart ESP32
+        server->send(200, "application/json", "{\"success\":true,\"message\":\"Restarting...\"}");
+        delay(1000);
+        ESP.restart();
+        return true;
+    } else if (command == "factory_reset") {
+        // Clear all settings
+        wifiManager.clearCredentials();
+        // Add other reset logic here
+        return true;
+    }
+    
+    return false;
+}
+
+String WebServerManager::htmlEncode(const String& str) {
+    String encoded = str;
+    encoded.replace("&", "&amp;");
+    encoded.replace("\"", "&quot;");
+    encoded.replace("'", "&#39;");
+    encoded.replace("<", "&lt;");
+    encoded.replace(">", "&gt;");
+    return encoded;
+}
+
+#endif // ESP32
