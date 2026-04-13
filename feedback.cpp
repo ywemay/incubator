@@ -121,3 +121,15 @@ void Feedback::setIPAddress(const String& ip_address) {
 String Feedback::getIPAddress() const {
   return current_ip_address;
 }
+
+void Feedback::displayIncubatorInfo(float current_temp, float current_humidity, 
+                                   float target_temp, unsigned int turn_interval,
+                                   unsigned int incubation_day, unsigned int total_days,
+                                   bool wifi_connected, unsigned int turning, 
+                                   unsigned int remained) {
+  #ifdef OLED_ON
+    oled.displayIncubatorInfo(current_temp, current_humidity, target_temp, 
+                             turn_interval, incubation_day, total_days,
+                             current_ip_address, wifi_connected, turning, remained);
+  #endif
+}

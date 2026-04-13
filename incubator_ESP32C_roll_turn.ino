@@ -120,6 +120,27 @@ void loop() {
     feedback.display_sensor(state);
   } else {
     unsigned int turning = turner.process();
+    
+    // Use the new cycling display system
+    #ifdef ESP32
+    // Get incubation tracking info
+    unsigned int incubation_day = incubationTracker.getElapsedDays();
+    unsigned int total_days = incubationTracker.getCurrentIncubationDays();
+    bool wifi_connected = wifiManager.isConnected();
+    
+    feedback.displayIncubatorInfo(
+      thermo.temperature(),      // Current temperature
+      thermo.humidity(),         // Current humidity
+      targetTemp,                // Target temperature
+      EGGS_TURNING_INTERVAL,     // Turn interval
+      incubation_day,            // Current incubation day
+      total_days,                // Total incubation days
+      wifi_connected,            // WiFi connection status
+      turning,                   // Egg turning status
+      turner.remained()          // Time remaining until next turn
+    );
+    #else
+    // Fallback to old display for non-ESP32
     feedback.stats(
       thermo.temperature(),
       thermo.humidity(),
@@ -127,6 +148,7 @@ void loop() {
       turner.remained(),
       state
     );
+    #endif
   }
   
   // Handle WiFi and Web Server (ESP32 only)
