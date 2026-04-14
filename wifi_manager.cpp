@@ -10,7 +10,8 @@
 #define CONFIG_PORTAL_TIMEOUT 300000 // 5 minutes
 
 // Device hostname (for network discovery)
-#define DEVICE_HOSTNAME "incubator-esp32"
+// Base name for the device
+#define DEVICE_BASE_NAME "incubator-esp32"
 
 WiFiManager::WiFiManager() :
     wifi_connected(false),
@@ -18,7 +19,8 @@ WiFiManager::WiFiManager() :
     last_connection_attempt(0),
     connection_timeout(30000), // 30 seconds
     config_server(nullptr),
-    connection_retries(0)
+    connection_retries(0),
+    device_hostname("")
 {
     // Initialize strings
     wifi_ssid[0] = '\0';
@@ -35,9 +37,68 @@ WiFiManager::~WiFiManager() {
 void WiFiManager::begin() {
     Serial.println("[WiFi] Initializing WiFi Manager");
     
+    // Generate unique hostname with multiple components
+    String hostname_parts = "";
+    
+    // 1. Get MAC address for device uniqueness
+    String mac = WiFi.macAddress();
+    mac.replace(":", "");
+    String mac_id = mac.substring(mac.length() - 4); // Last 4 chars of MAC
+    mac_id.toLowerCase();
+    hostname_parts += mac_id;
+    
+    // 2. Add compilation timestamp for build uniqueness
+    // Use __DATE__ and __TIME__ macros (predefined by compiler)
+    const char* compile_date = __DATE__;  // Format: "Apr 14 2026"
+    const char* compile_time = __TIME__;  // Format: "12:09:30"
+    
+    // Extract month abbreviation (3 chars)
+    char month[4] = {0};
+    strncpy(month, compile_date, 3);
+    month[3] = '\0';
+    
+    // Extract day (1 or 2 chars)
+    char day[3] = {0};
+    // Day starts at position 4
+    if (compile_date[4] == ' ') {
+        // Single digit day
+        day[0] = '0';
+        day[1] = compile_date[5];
+    } else {
+        // Two digit day
+        day[0] = compile_date[4];
+        day[1] = compile_date[5];
+    }
+    day[2] = '\0';
+    
+    // Extract hour and minute from compile time (format: "12:09:30")
+    char hour[3] = {compile_time[0], compile_time[1], '\0'};
+    char minute[3] = {compile_time[3], compile_time[4], '\0'};
+    
+    // Create a short timestamp code
+    char timestamp_code[13];
+    snprintf(timestamp_code, sizeof(timestamp_code), "%s%s%s%s", month, day, hour, minute);
+    
+    // 3. Combine all parts
+    char hostname_buf[64];
+    snprintf(hostname_buf, sizeof(hostname_buf), "%s-%s-%s", 
+             DEVICE_BASE_NAME, mac_id.c_str(), timestamp_code);
+    
+    device_hostname = String(hostname_buf);
+    
+    // Clean up the hostname (convert to lowercase, remove any spaces)
+    device_hostname.toLowerCase();
+    device_hostname.replace(" ", "");
+    
+    // Ensure hostname is valid (max 32 chars for WiFi hostname)
+    if (device_hostname.length() > 32) {
+        device_hostname = device_hostname.substring(0, 32);
+    }
+    
     // Set hostname for network discovery
-    WiFi.setHostname(DEVICE_HOSTNAME);
-    Serial.printf("[WiFi] Hostname set to: %s\n", DEVICE_HOSTNAME);
+    WiFi.setHostname(device_hostname.c_str());
+    Serial.printf("[WiFi] Hostname set to: %s\n", device_hostname.c_str());
+    Serial.printf("[WiFi] Compiled on: %s at %s\n", compile_date, compile_time);
     
     // Initialize preferences
     preferences.begin("incubator", false);
@@ -463,7 +524,8 @@ String WiFiManager::getIPAddress() const {
 }
 
 String WiFiManager::getHostname() const {
-    return String(DEVICE_HOSTNAME);
+    // Return the generated hostname
+    return device_hostname;
 }
 
 bool WiFiManager::hasCredentials() const {

@@ -505,10 +505,10 @@ void WebServerManager::handleRoot() {
                         <input type="number" id="configTurnInterval" min="1" max="24" required>
                     </div>
                     <div class="form-group">
-                        <label for="configPassword">Security Password (optional)</label>
-                        <input type="password" id="configPassword" placeholder="Leave empty to disable security">
+                        <label for="configTurnDuration">Turn Duration (seconds)</label>
+                        <input type="number" id="configTurnDuration" min="1" max="60" required>
                         <div class="text-sm text-gray-500 mt-1">
-                            Set a password to protect controls from unauthorized changes. Leave empty to disable security.
+                            How long the egg turner motor runs each time (1-60 seconds)
                         </div>
                     </div>
                     <button type="submit" class="success">Update Configuration</button>
@@ -516,6 +516,36 @@ void WebServerManager::handleRoot() {
                 <div class="network-info">
                     <div class="stat-label">Connected to WiFi:</div>
                     <div class="stat-value" id="connectedSSID">--</div>
+                </div>
+            </div>
+            
+            <!-- Password Configuration Card -->
+            <div class="card">
+                <h2>Password Configuration</h2>
+                <div class="text-sm text-gray-500 mb-4">
+                    Configure security password separately from other settings.
+                </div>
+                <form class="config-form" onsubmit="return updatePasswordConfig()">
+                    <div class="form-group">
+                        <label for="passwordConfigCurrent">Current Password (if set)</label>
+                        <input type="password" id="passwordConfigCurrent" placeholder="Enter current password if changing">
+                    </div>
+                    <div class="form-group">
+                        <label for="passwordConfigNew">New Password</label>
+                        <input type="password" id="passwordConfigNew" placeholder="Enter new password">
+                        <div class="text-sm text-gray-500 mt-1">
+                            Leave empty to disable password protection
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="passwordConfigConfirm">Confirm New Password</label>
+                        <input type="password" id="passwordConfigConfirm" placeholder="Confirm new password">
+                    </div>
+                    <button type="submit" class="success">Update Password</button>
+                </form>
+                <div class="mt-4 text-sm">
+                    <div class="stat-label">Password Status:</div>
+                    <div class="stat-value" id="passwordStatus">--</div>
                 </div>
             </div>
             
@@ -702,6 +732,9 @@ void WebServerManager::handleRoot() {
                     // Update configuration form
                     document.getElementById('configTargetTemp').value = data.target_temp;
                     document.getElementById('configTurnInterval').value = data.turn_interval / 3600;
+                    if (data.turn_duration !== undefined) {
+                        document.getElementById('configTurnDuration').value = data.turn_duration;
+                    }
                     
                     // Update incubation tracking
                     document.getElementById('incubationStatus').textContent = 
@@ -715,6 +748,12 @@ void WebServerManager::handleRoot() {
                     document.getElementById('incubationTotalDays').textContent = 'of ' + 
                         (data.incubation_day + data.incubation_remaining_days) + ' days';
                     document.getElementById('incubationRemaining').textContent = data.incubation_remaining_days + ' days';
+                    
+                    // Update password status
+                    const passwordStatus = data.password_enabled ? 
+                        (data.authenticated ? 'ENABLED (Authenticated)' : 'ENABLED (Locked)') : 
+                        'DISABLED';
+                    document.getElementById('passwordStatus').textContent = passwordStatus;
                     
                     // Update alerts
                     const alertsDiv = document.getElementById('incubationAlerts');
@@ -849,7 +888,7 @@ void WebServerManager::handleRoot() {
         function updateConfig() {
             const targetTemp = parseFloat(document.getElementById('configTargetTemp').value);
             const turnInterval = parseInt(document.getElementById('configTurnInterval').value);
-            const password = document.getElementById('configPassword').value;
+            const turnDuration = parseInt(document.getElementById('configTurnDuration').value);
             
             if (isNaN(targetTemp) || targetTemp < 35 || targetTemp > 42) {
                 alert('Target temperature must be between 35°C and 42°C');
@@ -861,15 +900,16 @@ void WebServerManager::handleRoot() {
                 return false;
             }
             
+            if (isNaN(turnDuration) || turnDuration < 1 || turnDuration > 60) {
+                alert('Turn duration must be between 1 and 60 seconds');
+                return false;
+            }
+            
             const payload = {
                 target_temp: targetTemp,
-                turn_interval: turnInterval * 3600 // Convert hours to seconds
+                turn_interval: turnInterval * 3600, // Convert hours to seconds
+                turn_duration: turnDuration
             };
-            
-            // Add password if provided
-            if (password.length > 0) {
-                payload.password = password;
-            }
             
             // Check authentication before updating config
             fetch('/api/auth')
@@ -902,8 +942,6 @@ void WebServerManager::handleRoot() {
                 if (data.success) {
                     alert('Configuration updated successfully');
                     updateDashboard(); // Refresh data
-                    // Clear password field
-                    document.getElementById('configPassword').value = '';
                 } else {
                     if (data.message && data.message.includes('Authentication')) {
                         alert('Authentication required. Please enter password.');
@@ -919,6 +957,74 @@ void WebServerManager::handleRoot() {
             });
             
             return false; // Prevent form submission
+        }
+        
+        function updatePasswordConfig() {
+            const currentPassword = document.getElementById('passwordConfigCurrent').value;
+            const newPassword = document.getElementById('passwordConfigNew').value;
+            const confirmPassword = document.getElementById('passwordConfigConfirm').value;
+            
+            // Validate passwords match
+            if (newPassword !== confirmPassword) {
+                alert('New password and confirmation do not match');
+                return false;
+            }
+            
+            // Prepare payload
+            const payload = {
+                command: 'update_password',
+                current_password: currentPassword,
+                new_password: newPassword
+            };
+            
+            // Check authentication before updating password
+            fetch('/api/auth')
+                .then(response => response.json())
+                .then(authData => {
+                    if (authData.requires_password) {
+                        // Show password modal
+                        showPasswordModal('sendCommand', payload);
+                    } else {
+                        // Already authenticated or no password required
+                        executePasswordUpdate(payload);
+                    }
+                })
+                .catch(error => {
+                    console.error('Auth check error:', error);
+                    executePasswordUpdate(payload);
+                });
+            
+            return false; // Prevent form submission
+        }
+        
+        function executePasswordUpdate(payload) {
+            fetch('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Password updated successfully');
+                    // Clear password fields
+                    document.getElementById('passwordConfigCurrent').value = '';
+                    document.getElementById('passwordConfigNew').value = '';
+                    document.getElementById('passwordConfigConfirm').value = '';
+                    updateDashboard(); // Refresh data
+                } else {
+                    if (data.message && data.message.includes('Authentication')) {
+                        alert('Authentication required. Please enter password.');
+                        showPasswordModal('sendCommand', payload);
+                    } else {
+                        alert('Error: ' + (data.message || 'Unknown error'));
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error updating password:', error);
+                alert('Network error updating password');
+            });
         }
         
         function startIncubation() {
@@ -1322,10 +1428,14 @@ String WebServerManager::getSystemStatusJSON() {
     bool turner_active = digitalRead(EGGS_TURNER_PIN);
     doc["turner_active"] = turner_active;
     doc["turner_turning"] = turner_active;
+    doc["turn_duration"] = EGGS_TURN_SECONDS;
     #else
     // For servo mode or when turner pin is not defined
     doc["turner_active"] = false;
     doc["turner_turning"] = false;
+    #ifdef EGGS_TURNER_SERVO_PIN
+    doc["turn_duration"] = EGGS_TURN_SECONDS;
+    #endif
     #endif
     
     // System data
@@ -1373,6 +1483,9 @@ String WebServerManager::getSystemConfigJSON() {
     
     doc["target_temp"] = targetTemp;
     doc["turn_interval"] = EGGS_TURNING_INTERVAL;
+    #ifdef EGGS_TURNER_PIN
+    doc["turn_duration"] = EGGS_TURN_SECONDS;
+    #endif
     doc["wifi_ssid"] = wifiManager.getSSID();
     
     String json;
@@ -1504,7 +1617,7 @@ bool WebServerManager::executeCommand(const String& command, const JsonDocument&
     if (command == "turn_now" || command == "stop_turning" || 
         command == "reset_timer" || command == "start_incubation" || 
         command == "stop_incubation" || command == "restart" || 
-        command == "factory_reset") {
+        command == "factory_reset" || command == "update_password") {
         requiresAuth = true;
     }
     
@@ -1590,6 +1703,39 @@ bool WebServerManager::executeCommand(const String& command, const JsonDocument&
             
             Serial.printf("[Web] Incubation stopped. Restored defaults. Temp: %.1f°C, Interval: %u seconds\n", 
                          default_temp, default_interval);
+        }
+        
+        return success;
+    } else if (command == "update_password") {
+        // Update password
+        if (!data.containsKey("new_password")) {
+            Serial.println("[Web] Missing new_password in update_password command");
+            return false;
+        }
+        
+        String new_password = data["new_password"].as<String>();
+        
+        // If current_password is provided, verify it first
+        if (data.containsKey("current_password")) {
+            String current_password = data["current_password"].as<String>();
+            if (!passwordManager.authenticate(current_password)) {
+                Serial.println("[Web] Current password verification failed");
+                return false;
+            }
+        } else {
+            // If no current password provided, check if we're already authenticated
+            if (!checkAuthentication()) {
+                Serial.println("[Web] Authentication required for password update");
+                return false;
+            }
+        }
+        
+        // Set the new password
+        bool success = passwordManager.setPassword(new_password);
+        if (success) {
+            Serial.println("[Web] Password updated successfully");
+        } else {
+            Serial.println("[Web] Failed to update password");
         }
         
         return success;

@@ -32,6 +32,9 @@ private:
     // Connection retry counter
     uint8_t connection_retries;
     
+    // Device hostname
+    String device_hostname;
+    
 public:
     WiFiManager();
     ~WiFiManager();
@@ -89,7 +92,10 @@ public:
     bool isAPModeActive() const { return false; }
     String getIPAddress() const { return "N/A"; }
     String getSSID() const { return "N/A"; }
-    String getHostname() const { return "incubator-esp32"; }
+    String getHostname() const { 
+        // For non-ESP32, return a generic name
+        return "incubator-esp32-generic"; 
+    }
     bool hasCredentials() const { return false; }
     void clearCredentials() { /* No-op */ }
 };

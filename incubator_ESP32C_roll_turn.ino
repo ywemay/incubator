@@ -27,7 +27,7 @@ IncubationTracker incubationTracker;
 PasswordManager passwordManager;
 
 // Global configuration variables (defined here for ESP32)
-float targetTemp = 38.0;
+float targetTemp = 24.0;
 unsigned int EGGS_TURNING_INTERVAL = 8 * 60 * 60;
 
 // Incubator state variable
