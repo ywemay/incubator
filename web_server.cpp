@@ -10,6 +10,7 @@
 extern WiFiManager wifiManager;
 extern ConfigStorage configStorage;
 extern PasswordManager passwordManager;
+extern String incubatorName;
 
 WebServerManager::WebServerManager() : 
     server(nullptr),
@@ -475,6 +476,10 @@ void WebServerManager::handleRoot() {
                     </div>
                 </div>
                 <div class="stat">
+                    <div class="stat-label">Incubator Name</div>
+                    <div class="stat-value" id="incubatorNameDisplay">--</div>
+                </div>
+                <div class="stat">
                     <div class="stat-label">Hostname</div>
                     <div class="stat-value" id="hostname">incubator-esp32</div>
                 </div>
@@ -496,6 +501,13 @@ void WebServerManager::handleRoot() {
             <div class="card">
                 <h2>Configuration</h2>
                 <form class="config-form" onsubmit="return updateConfig()">
+                    <div class="form-group">
+                        <label for="configIncubatorName">Incubator Name (optional)</label>
+                        <input type="text" id="configIncubatorName" maxlength="32" placeholder="e.g., Kitchen Incubator, Chicken Hatcher">
+                        <div class="text-sm text-gray-500 mt-1">
+                            Give your incubator a human-readable name (max 32 characters)
+                        </div>
+                    </div>
                     <div class="form-group">
                         <label for="configTargetTemp">Target Temperature (°C)</label>
                         <input type="number" id="configTargetTemp" step="0.1" min="35" max="42" required>
@@ -724,17 +736,16 @@ void WebServerManager::handleRoot() {
                     document.getElementById('wifiStatus').textContent = data.wifi_connected ? 'CONNECTED' : 'DISCONNECTED';
                     document.getElementById('wifiBadge').textContent = data.wifi_connected ? 'ONLINE' : 'OFFLINE';
                     document.getElementById('wifiBadge').className = 'status-badge ' + (data.wifi_connected ? 'status-online' : 'status-offline');
+                    // Display incubator name or show hostname if no name is set
+                    if (data.incubator_name && data.incubator_name.length > 0) {
+                        document.getElementById('incubatorNameDisplay').textContent = data.incubator_name;
+                    } else {
+                        document.getElementById('incubatorNameDisplay').textContent = data.hostname;
+                    }
                     document.getElementById('hostname').textContent = data.hostname;
                     document.getElementById('ipAddress').textContent = data.ip_address;
                     document.getElementById('uptime').textContent = data.uptime;
                     document.getElementById('connectedSSID').textContent = data.wifi_ssid;
-                    
-                    // Update configuration form
-                    document.getElementById('configTargetTemp').value = data.target_temp;
-                    document.getElementById('configTurnInterval').value = data.turn_interval / 3600;
-                    if (data.turn_duration !== undefined) {
-                        document.getElementById('configTurnDuration').value = data.turn_duration;
-                    }
                     
                     // Update incubation tracking
                     document.getElementById('incubationStatus').textContent = 
@@ -886,9 +897,16 @@ void WebServerManager::handleRoot() {
         }
         
         function updateConfig() {
+            const incubatorName = document.getElementById('configIncubatorName').value.trim();
             const targetTemp = parseFloat(document.getElementById('configTargetTemp').value);
             const turnInterval = parseInt(document.getElementById('configTurnInterval').value);
             const turnDuration = parseInt(document.getElementById('configTurnDuration').value);
+            
+            // Validate incubator name length
+            if (incubatorName.length > 32) {
+                alert('Incubator name must be 32 characters or less');
+                return false;
+            }
             
             if (isNaN(targetTemp) || targetTemp < 35 || targetTemp > 42) {
                 alert('Target temperature must be between 35°C and 42°C');
@@ -910,6 +928,11 @@ void WebServerManager::handleRoot() {
                 turn_interval: turnInterval * 3600, // Convert hours to seconds
                 turn_duration: turnDuration
             };
+            
+            // Add incubator name if provided
+            if (incubatorName.length > 0) {
+                payload.incubator_name = incubatorName;
+            }
             
             // Check authentication before updating config
             fetch('/api/auth')
@@ -942,6 +965,21 @@ void WebServerManager::handleRoot() {
                 if (data.success) {
                     alert('Configuration updated successfully');
                     updateDashboard(); // Refresh data
+                    
+                    // Update form fields with the values that were just saved
+                    // This ensures the form reflects the current configuration
+                    if (payload.target_temp !== undefined) {
+                        document.getElementById('configTargetTemp').value = payload.target_temp;
+                    }
+                    if (payload.turn_interval !== undefined) {
+                        document.getElementById('configTurnInterval').value = payload.turn_interval / 3600;
+                    }
+                    if (payload.turn_duration !== undefined) {
+                        document.getElementById('configTurnDuration').value = payload.turn_duration;
+                    }
+                    if (payload.incubator_name !== undefined) {
+                        document.getElementById('configIncubatorName').value = payload.incubator_name;
+                    }
                 } else {
                     if (data.message && data.message.includes('Authentication')) {
                         alert('Authentication required. Please enter password.');
@@ -1155,8 +1193,27 @@ void WebServerManager::handleRoot() {
         // Start auto-update every 5 seconds
         updateInterval = setInterval(updateDashboard, 5000);
         
-        // Initial update
-        updateDashboard();
+        // Initial update - load current configuration
+        fetch('/api/config')
+            .then(response => response.json())
+            .then(configData => {
+                // Populate configuration form once on page load
+                document.getElementById('configTargetTemp').value = configData.target_temp;
+                document.getElementById('configTurnInterval').value = configData.turn_interval / 3600;
+                if (configData.turn_duration !== undefined) {
+                    document.getElementById('configTurnDuration').value = configData.turn_duration;
+                }
+                if (configData.incubator_name !== undefined) {
+                    document.getElementById('configIncubatorName').value = configData.incubator_name;
+                }
+                
+                // Now update the dashboard (which won't update form fields)
+                updateDashboard();
+            })
+            .catch(error => {
+                console.error('Error loading configuration:', error);
+                updateDashboard();
+            });
         
         // Stop auto-update when page is hidden
         document.addEventListener('visibilitychange', function() {
@@ -1445,6 +1502,7 @@ String WebServerManager::getSystemStatusJSON() {
     doc["hostname"] = wifiManager.getHostname();
     doc["ip_address"] = wifiManager.getIPAddress();
     doc["wifi_ssid"] = wifiManager.getSSID();
+    doc["incubator_name"] = incubatorName;
     
     // Incubation data
     bool incubation_active = incubationTracker.isSessionActive();
@@ -1483,6 +1541,7 @@ String WebServerManager::getSystemConfigJSON() {
     
     doc["target_temp"] = targetTemp;
     doc["turn_interval"] = EGGS_TURNING_INTERVAL;
+    doc["incubator_name"] = incubatorName;
     #ifdef EGGS_TURNER_PIN
     doc["turn_duration"] = EGGS_TURN_SECONDS;
     #endif
@@ -1528,6 +1587,25 @@ bool WebServerManager::updateConfig(const JsonDocument& doc) {
     }
     
     bool updated = false;
+    
+    // Handle incubator name update if provided
+    if (doc.containsKey("incubator_name")) {
+        String new_name = doc["incubator_name"].as<String>();
+        new_name.trim();
+        
+        // Validate name length
+        if (new_name.length() <= 32) {
+            incubatorName = new_name;
+            
+            // Save to storage
+            configStorage.saveIncubatorName(new_name);
+            
+            Serial.printf("[Web] Incubator name updated to: %s\n", new_name.c_str());
+            updated = true;
+        } else {
+            Serial.printf("[Web] Incubator name too long: %d characters\n", new_name.length());
+        }
+    }
     
     // Handle password update if provided
     if (doc.containsKey("password")) {

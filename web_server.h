@@ -21,6 +21,7 @@ extern Turner turner;
 extern Feedback feedback;
 extern IncubationTracker incubationTracker;
 extern PasswordManager passwordManager;
+extern String incubatorName;
 
 class WebServerManager {
 private:

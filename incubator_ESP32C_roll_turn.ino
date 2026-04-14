@@ -29,6 +29,7 @@ PasswordManager passwordManager;
 // Global configuration variables (defined here for ESP32)
 float targetTemp = 24.0;
 unsigned int EGGS_TURNING_INTERVAL = 8 * 60 * 60;
+String incubatorName = "";  // User-defined incubator name
 
 // Incubator state variable
 int incubatorState = INCUBATOR_IDLE;
@@ -52,6 +53,7 @@ void setup() {
   if (configStorage.begin()) {
     targetTemp = configStorage.loadTargetTemperature(38.0);
     EGGS_TURNING_INTERVAL = configStorage.loadTurnInterval(8 * 60 * 60);
+    incubatorName = configStorage.loadIncubatorName("");
     #ifdef EGGS_TURNER_PIN
     EGGS_TURN_SECONDS = configStorage.loadTurnDuration(2);
     #endif
@@ -59,6 +61,9 @@ void setup() {
   }
   Serial.printf("Configuration loaded: Temp=%.1f°C, Interval=%u sec\n", 
                 targetTemp, EGGS_TURNING_INTERVAL);
+  if (incubatorName.length() > 0) {
+    Serial.printf("Incubator name: %s\n", incubatorName.c_str());
+  }
   #endif
   
   // Initialize hardware components

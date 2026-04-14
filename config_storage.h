@@ -48,6 +48,10 @@ public:
     bool saveBirdSpecies(int species);
     int loadBirdSpecies(int default_value = 0);
     
+    // Incubator name
+    bool saveIncubatorName(const String& name);
+    String loadIncubatorName(const String& default_name = "");
+    
     // Factory reset
     bool factoryReset();
     

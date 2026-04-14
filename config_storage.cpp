@@ -282,6 +282,39 @@ int ConfigStorage::loadBirdSpecies(int default_value) {
     return species;
 }
 
+bool ConfigStorage::saveIncubatorName(const String& name) {
+    if (!begin()) return false;
+    
+    // Validate name length (max 32 characters for safety)
+    String trimmed_name = name;
+    trimmed_name.trim();
+    
+    if (trimmed_name.length() > 32) {
+        trimmed_name = trimmed_name.substring(0, 32);
+    }
+    
+    bool success = preferences.putString("incubator_name", trimmed_name.c_str());
+    end();
+    
+    if (success) {
+        Serial.printf("[Config] Saved incubator name: %s\n", trimmed_name.c_str());
+    } else {
+        Serial.println("[Config] Failed to save incubator name");
+    }
+    
+    return success;
+}
+
+String ConfigStorage::loadIncubatorName(const String& default_name) {
+    if (!begin()) return default_name;
+    
+    String name = preferences.getString("incubator_name", default_name.c_str());
+    end();
+    
+    Serial.printf("[Config] Loaded incubator name: %s\n", name.c_str());
+    return name;
+}
+
 bool ConfigStorage::factoryReset() {
     if (!begin()) return false;
     
