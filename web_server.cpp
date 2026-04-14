@@ -1,6 +1,7 @@
 #include "web_server.h"
 #include "wifi_manager.h"
 #include "config_storage.h"
+#include "password_manager.h"
 
 // Only compile for ESP32
 #ifdef ESP32
@@ -8,6 +9,7 @@
 // External managers
 extern WiFiManager wifiManager;
 extern ConfigStorage configStorage;
+extern PasswordManager passwordManager;
 
 WebServerManager::WebServerManager() : 
     server(nullptr),
@@ -125,6 +127,7 @@ void WebServerManager::setupRoutes() {
     server->on("/api/time", std::bind(&WebServerManager::handleAPITime, this));
     server->on("/api/system", std::bind(&WebServerManager::handleSystemInfo, this));
     server->on("/api/incubation", std::bind(&WebServerManager::handleIncubationAPI, this));
+    server->on("/api/auth", std::bind(&WebServerManager::handleAuthAPI, this));
     server->onNotFound(std::bind(&WebServerManager::handleNotFound, this));
 }
 
@@ -148,6 +151,71 @@ void WebServerManager::handleRoot() {
             min-height: 100vh;
             color: #333;
         }
+        
+        /* Password Modal */
+        .password-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .password-modal.active {
+            display: flex;
+        }
+        .password-modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 90%;
+        }
+        .password-modal h3 {
+            margin-top: 0;
+            color: #2d3748;
+        }
+        .password-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1em;
+            margin-bottom: 20px;
+        }
+        .password-input:focus {
+            outline: none;
+            border-color: #4c51bf;
+        }
+        .password-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .password-error {
+            color: #e53e3e;
+            margin-bottom: 15px;
+            display: none;
+        }
+        .password-error.active {
+            display: block;
+        }
+        .security-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .security-on { background: #c6f6d5; color: #22543d; }
+        .security-off { background: #fed7d7; color: #742a2a; }
+        .security-warning { background: #feebc8; color: #744210; }
         .container { 
             max-width: 1200px; 
             margin: 0 auto; 
@@ -309,7 +377,26 @@ void WebServerManager::handleRoot() {
         <header>
             <h1>🥚 ESP32 Incubator Controller</h1>
             <div class="subtitle">Smart incubation with remote monitoring</div>
+            <div class="security-status" id="securityStatus">
+                Security: <span id="securityBadge" class="security-badge security-off">OFF</span>
+            </div>
         </header>
+        
+        <!-- Password Modal -->
+        <div class="password-modal" id="passwordModal">
+            <div class="password-modal-content">
+                <h3>Authentication Required</h3>
+                <div class="password-error" id="passwordError">
+                    Incorrect password. Please try again.
+                </div>
+                <p>This operation requires authentication. Please enter your password:</p>
+                <input type="password" class="password-input" id="passwordInput" placeholder="Enter password" autocomplete="current-password">
+                <div class="password-buttons">
+                    <button onclick="hidePasswordModal()">Cancel</button>
+                    <button class="success" onclick="submitPassword()">Authenticate</button>
+                </div>
+            </div>
+        </div>
         
         <div class="dashboard">
             <!-- Temperature & Humidity Card -->
@@ -417,6 +504,13 @@ void WebServerManager::handleRoot() {
                         <label for="configTurnInterval">Turn Interval (hours)</label>
                         <input type="number" id="configTurnInterval" min="1" max="24" required>
                     </div>
+                    <div class="form-group">
+                        <label for="configPassword">Security Password (optional)</label>
+                        <input type="password" id="configPassword" placeholder="Leave empty to disable security">
+                        <div class="text-sm text-gray-500 mt-1">
+                            Set a password to protect controls from unauthorized changes. Leave empty to disable security.
+                        </div>
+                    </div>
                     <button type="submit" class="success">Update Configuration</button>
                 </form>
                 <div class="network-info">
@@ -484,6 +578,76 @@ void WebServerManager::handleRoot() {
     
     <script>
         let updateInterval;
+        
+        // Password authentication
+        let pendingCommand = null;
+        let pendingCommandData = null;
+        
+        function showPasswordModal(command, data = null) {
+            pendingCommand = command;
+            pendingCommandData = data;
+            document.getElementById('passwordModal').classList.add('active');
+            document.getElementById('passwordInput').focus();
+            document.getElementById('passwordError').classList.remove('active');
+        }
+        
+        function hidePasswordModal() {
+            document.getElementById('passwordModal').classList.remove('active');
+            pendingCommand = null;
+            pendingCommandData = null;
+            document.getElementById('passwordInput').value = '';
+        }
+        
+        function submitPassword() {
+            const password = document.getElementById('passwordInput').value;
+            
+            fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    hidePasswordModal();
+                    // Execute the pending command
+                    if (pendingCommand === 'sendCommand') {
+                        executeCommand(pendingCommandData.command, pendingCommandData.data);
+                    } else if (pendingCommand === 'updateConfig') {
+                        executeUpdateConfig(pendingCommandData);
+                    }
+                } else {
+                    document.getElementById('passwordError').classList.add('active');
+                    document.getElementById('passwordInput').value = '';
+                    document.getElementById('passwordInput').focus();
+                }
+            })
+            .catch(error => {
+                console.error('Password authentication error:', error);
+                document.getElementById('passwordError').textContent = 'Network error';
+                document.getElementById('passwordError').classList.add('active');
+            });
+        }
+        
+        // Check if authentication is required before executing command
+        function checkAuthAndExecute(command, data = null) {
+            // First check current authentication status
+            fetch('/api/auth')
+                .then(response => response.json())
+                .then(authData => {
+                    if (authData.requires_password) {
+                        // Show password modal
+                        showPasswordModal('sendCommand', { command: command, data: data });
+                    } else {
+                        // Already authenticated or no password required
+                        executeCommand(command, data);
+                    }
+                })
+                .catch(error => {
+                    console.error('Auth check error:', error);
+                    executeCommand(command, data);
+                });
+        }
         
         function updateDashboard() {
             fetch('/api/status')
@@ -568,27 +732,37 @@ void WebServerManager::handleRoot() {
                         }
                     }
                     
-                    // Update incubation buttons based on incubator state
+                    // Update incubation controls based on incubator state
+                    const speciesSelect = document.getElementById('birdSpecies');
                     const startBtn = document.getElementById('startIncubationBtn');
                     const stopBtn = document.getElementById('stopIncubationBtn');
                     const isIncubating = data.incubator_state === 'incubating' || data.incubation_active;
                     
                     if (isIncubating) {
-                        // When incubating: disable Start button, enable Stop button
-                        startBtn.disabled = true;
-                        startBtn.style.opacity = '0.5';
-                        startBtn.style.cursor = 'not-allowed';
-                        stopBtn.disabled = false;
-                        stopBtn.style.opacity = '1';
-                        stopBtn.style.cursor = 'pointer';
+                        // When incubating: hide species selector and Start button, show Stop button
+                        speciesSelect.style.display = 'none';
+                        startBtn.style.display = 'none';
+                        stopBtn.style.display = 'block';
                     } else {
-                        // When idle: enable Start button, disable Stop button
-                        startBtn.disabled = false;
-                        startBtn.style.opacity = '1';
-                        startBtn.style.cursor = 'pointer';
-                        stopBtn.disabled = true;
-                        stopBtn.style.opacity = '0.5';
-                        stopBtn.style.cursor = 'not-allowed';
+                        // When idle: show species selector and Start button, hide Stop button
+                        speciesSelect.style.display = 'block';
+                        startBtn.style.display = 'block';
+                        stopBtn.style.display = 'none';
+                    }
+                    
+                    // Update security status
+                    const securityBadge = document.getElementById('securityBadge');
+                    if (data.password_enabled) {
+                        if (data.authenticated) {
+                            securityBadge.textContent = 'AUTHENTICATED';
+                            securityBadge.className = 'security-badge security-on';
+                        } else {
+                            securityBadge.textContent = 'LOCKED';
+                            securityBadge.className = 'security-badge security-warning';
+                        }
+                    } else {
+                        securityBadge.textContent = 'OFF';
+                        securityBadge.className = 'security-badge security-off';
                     }
                     
                     // Update last update time
@@ -610,6 +784,12 @@ void WebServerManager::handleRoot() {
             const command = isTurning ? 'stop_turning' : 'turn_now';
             const payload = { command: command };
             
+            // Check authentication before executing
+            checkAuthAndExecute(command, payload);
+        }
+        
+        // Original sendCommand function (now used internally)
+        function executeCommand(command, payload) {
             fetch('/api/command', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -618,17 +798,23 @@ void WebServerManager::handleRoot() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Update button immediately for better UX
-                    if (isTurning) {
-                        turnButton.textContent = 'Turn Now';
-                        turnButton.className = 'success';
-                    } else {
-                        turnButton.textContent = 'Stop Turning';
-                        turnButton.className = 'danger';
+                    if (command === 'start_incubation') {
+                        alert('Incubation started successfully');
+                    } else if (command === 'stop_incubation') {
+                        alert('Incubation stopped successfully');
+                    } else if (command === 'turn_now' || command === 'stop_turning') {
+                        // Success message for turn commands
+                        const message = command === 'turn_now' ? 'Turning started' : 'Turning stopped';
+                        alert(message + ' successfully');
                     }
-                    updateDashboard(); // Refresh all data
+                    updateDashboard(); // Refresh data
                 } else {
-                    alert('Error: ' + (data.message || 'Unknown error'));
+                    if (data.message && data.message.includes('Authentication')) {
+                        alert('Authentication required. Please enter password.');
+                        showPasswordModal('sendCommand', { command: command, data: payload });
+                    } else {
+                        alert('Error: ' + (data.message || 'Unknown error'));
+                    }
                 }
             })
             .catch(error => {
@@ -663,6 +849,7 @@ void WebServerManager::handleRoot() {
         function updateConfig() {
             const targetTemp = parseFloat(document.getElementById('configTargetTemp').value);
             const turnInterval = parseInt(document.getElementById('configTurnInterval').value);
+            const password = document.getElementById('configPassword').value;
             
             if (isNaN(targetTemp) || targetTemp < 35 || targetTemp > 42) {
                 alert('Target temperature must be between 35°C and 42°C');
@@ -679,6 +866,32 @@ void WebServerManager::handleRoot() {
                 turn_interval: turnInterval * 3600 // Convert hours to seconds
             };
             
+            // Add password if provided
+            if (password.length > 0) {
+                payload.password = password;
+            }
+            
+            // Check authentication before updating config
+            fetch('/api/auth')
+                .then(response => response.json())
+                .then(authData => {
+                    if (authData.requires_password) {
+                        // Show password modal
+                        showPasswordModal('updateConfig', payload);
+                    } else {
+                        // Already authenticated or no password required
+                        executeUpdateConfig(payload);
+                    }
+                })
+                .catch(error => {
+                    console.error('Auth check error:', error);
+                    executeUpdateConfig(payload);
+                });
+            
+            return false; // Prevent form submission
+        }
+        
+        function executeUpdateConfig(payload) {
             fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -689,8 +902,15 @@ void WebServerManager::handleRoot() {
                 if (data.success) {
                     alert('Configuration updated successfully');
                     updateDashboard(); // Refresh data
+                    // Clear password field
+                    document.getElementById('configPassword').value = '';
                 } else {
-                    alert('Error: ' + (data.message || 'Unknown error'));
+                    if (data.message && data.message.includes('Authentication')) {
+                        alert('Authentication required. Please enter password.');
+                        showPasswordModal('updateConfig', payload);
+                    } else {
+                        alert('Error: ' + (data.message || 'Unknown error'));
+                    }
                 }
             })
             .catch(error => {
@@ -704,9 +924,15 @@ void WebServerManager::handleRoot() {
         function startIncubation() {
             const speciesSelect = document.getElementById('birdSpecies');
             const species = parseInt(speciesSelect.value);
+            const speciesName = speciesSelect.options[speciesSelect.selectedIndex].text;
             
             if (isNaN(species)) {
                 alert('Please select a bird species');
+                return;
+            }
+            
+            // Ask for confirmation
+            if (!confirm(`Are you sure you want to start incubation for ${speciesName}?\n\nThis will:\n• Set target temperature based on species\n• Set turn interval based on species\n• Start incubation tracking`)) {
                 return;
             }
             
@@ -715,11 +941,8 @@ void WebServerManager::handleRoot() {
                 species: species
             };
             
-            fetch('/api/command', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
+            // Check authentication before executing
+            checkAuthAndExecute('start_incubation', payload)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
@@ -736,7 +959,7 @@ void WebServerManager::handleRoot() {
         }
         
         function stopIncubation() {
-            if (!confirm('Are you sure you want to stop the current incubation session?')) {
+            if (!confirm('Are you sure you want to stop the current incubation session?\n\nThis will:\n• Reset to default temperature (38.0°C)\n• Reset to default turn interval (8 hours)\n• Clear incubation tracking data')) {
                 return;
             }
             
@@ -744,24 +967,8 @@ void WebServerManager::handleRoot() {
                 command: 'stop_incubation'
             };
             
-            fetch('/api/command', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Incubation stopped successfully');
-                    updateDashboard(); // Refresh data
-                } else {
-                    alert('Error: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error stopping incubation:', error);
-                alert('Network error stopping incubation');
-            });
+            // Check authentication before executing
+            checkAuthAndExecute('stop_incubation', payload);
         }
         
         function adjustIncubationDays() {
@@ -1050,6 +1257,46 @@ void WebServerManager::handleIncubationAPI() {
     }
 }
 
+void WebServerManager::handleAuthAPI() {
+    if (!server) return;
+    
+    if (server->method() == HTTP_POST) {
+        String body = server->arg("plain");
+        
+        StaticJsonDocument<128> doc;
+        DeserializationError error = deserializeJson(doc, body);
+        
+        if (error || !doc.containsKey("password")) {
+            server->send(400, "application/json", "{\"success\":false,\"message\":\"Invalid request\"}");
+            return;
+        }
+        
+        String password = doc["password"].as<String>();
+        bool authenticated = passwordManager.authenticate(password);
+        
+        if (authenticated) {
+            server->send(200, "application/json", "{\"success\":true,\"message\":\"Authenticated\"}");
+        } else {
+            server->send(401, "application/json", "{\"success\":false,\"message\":\"Authentication failed\"}");
+        }
+    } else if (server->method() == HTTP_GET) {
+        // Return authentication status
+        bool authenticated = checkAuthentication();
+        bool passwordEnabled = passwordManager.isPasswordEnabled();
+        
+        StaticJsonDocument<128> doc;
+        doc["authenticated"] = authenticated;
+        doc["password_enabled"] = passwordEnabled;
+        doc["requires_password"] = passwordEnabled && !authenticated;
+        
+        String json;
+        serializeJson(doc, json);
+        server->send(200, "application/json", json);
+    } else {
+        server->send(405, "application/json", "{\"success\":false,\"message\":\"Method not allowed\"}");
+    }
+}
+
 void WebServerManager::handleNotFound() {
     if (!server) return;
     
@@ -1112,6 +1359,10 @@ String WebServerManager::getSystemStatusJSON() {
     snprintf(uptimeStr, sizeof(uptimeStr), "%02lu:%02lu:%02lu", hours, minutes, seconds);
     doc["uptime"] = uptimeStr;
     
+    // Security status
+    doc["password_enabled"] = passwordManager.isPasswordEnabled();
+    doc["authenticated"] = checkAuthentication();
+    
     String json;
     serializeJson(doc, json);
     return json;
@@ -1157,7 +1408,24 @@ String WebServerManager::getSystemInfoJSON() {
 }
 
 bool WebServerManager::updateConfig(const JsonDocument& doc) {
+    // Check authentication for configuration updates
+    if (!checkAuthentication()) {
+        Serial.println("[Web] Authentication required for configuration update");
+        return false;
+    }
+    
     bool updated = false;
+    
+    // Handle password update if provided
+    if (doc.containsKey("password")) {
+        String password = doc["password"].as<String>();
+        if (passwordManager.setPassword(password)) {
+            Serial.println("[Web] Password updated");
+            updated = true;
+        } else {
+            Serial.println("[Web] Failed to update password");
+        }
+    }
     
     // Update target temperature
     if (doc.containsKey("target_temp")) {
@@ -1215,7 +1483,36 @@ bool WebServerManager::updateConfig(const JsonDocument& doc) {
     return updated;
 }
 
+bool WebServerManager::checkAuthentication() {
+    // Check if password is enabled
+    if (!passwordManager.isPasswordEnabled()) {
+        return true; // No password required
+    }
+    
+    // Check session
+    if (passwordManager.checkSession()) {
+        return true; // Session is valid
+    }
+    
+    return false; // Authentication required
+}
+
 bool WebServerManager::executeCommand(const String& command, const JsonDocument& data) {
+    // Check authentication for critical commands
+    bool requiresAuth = false;
+    
+    if (command == "turn_now" || command == "stop_turning" || 
+        command == "reset_timer" || command == "start_incubation" || 
+        command == "stop_incubation" || command == "restart" || 
+        command == "factory_reset") {
+        requiresAuth = true;
+    }
+    
+    if (requiresAuth && !checkAuthentication()) {
+        Serial.println("[Web] Authentication required for command: " + command);
+        return false;
+    }
+    
     if (command == "turn_now") {
         // Trigger egg turner immediately
         turner.turn();

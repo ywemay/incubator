@@ -13,12 +13,14 @@
 #include "turner.h"
 #include "feedback.h"
 #include "incubation_tracker.h"
+#include "password_manager.h"
 
 // Forward declarations
 extern Thermo thermo;
 extern Turner turner;
 extern Feedback feedback;
 extern IncubationTracker incubationTracker;
+extern PasswordManager passwordManager;
 
 class WebServerManager {
 private:
@@ -60,7 +62,11 @@ private:
     void handleAPITime();
     void handleSystemInfo();
     void handleIncubationAPI();
+    void handleAuthAPI();
     void handleNotFound();
+    
+    // Authentication helpers
+    bool checkAuthentication();
     
     // Helper functions
     String getSystemStatusJSON();

@@ -9,6 +9,7 @@
 #include "web_server.h"
 #include "config_storage.h"
 #include "incubation_tracker.h"
+#include "password_manager.h"
 #include "config.h"
 #endif
 
@@ -23,13 +24,14 @@ WiFiManager wifiManager;
 WebServerManager webServer;
 ConfigStorage configStorage;
 IncubationTracker incubationTracker;
+PasswordManager passwordManager;
 
 // Global configuration variables (defined here for ESP32)
 float targetTemp = 38.0;
 unsigned int EGGS_TURNING_INTERVAL = 8 * 60 * 60;
 
-// Incubator state variable (enum defined in config.h)
-IncubatorState incubatorState = INCUBATOR_IDLE;
+// Incubator state variable
+int incubatorState = INCUBATOR_IDLE;
 
 #ifdef EGGS_TURNER_PIN
 unsigned int EGGS_TURN_SECONDS = 2;
@@ -74,6 +76,7 @@ void setup() {
   wifiManager.begin();
   webServer.begin();
   incubationTracker.begin();
+  passwordManager.begin();
   
   // Initialize incubator state based on active session
   if (incubationTracker.isSessionActive()) {
